@@ -80,7 +80,7 @@ class LogEntry(BaseModel):
     tags: List[str] = Field(default_factory=list)
     message: str
     data: Dict[str, Any] = Field(default_factory=dict)
-    request: Optional[Dict[str, Any]] = Field(default=None)
+    request_id: str
     
     @validator('timestamp', pre=True)
     def parse_timestamp(cls, v):
@@ -152,7 +152,7 @@ class LogStorage:
                 'tags': json.dumps(log_entry.tags) if log_entry.tags else '[]',
                 'message': log_entry.message,
                 'data': json.dumps(log_entry.data) if log_entry.data else '{}',
-                'request_id': log_entry.request.get('id') if log_entry.request else None
+                'request_id': log_entry.request_id
             }
             
             with open(self.config.csv_filename, 'a', newline='', encoding='utf-8') as csvfile:
@@ -174,7 +174,6 @@ class LogStorage:
                 reader = csv.DictReader(f)
                 for row in reader:
                     try:
-                        # Novo formato da API
                         log_entry = LogEntry(
                             id=row['id'],
                             timestamp=datetime.fromisoformat(row['timestamp'].replace('Z', '+00:00')),
@@ -183,7 +182,7 @@ class LogStorage:
                             tags=json.loads(row.get('tags', '[]')),
                             message=row['message'],
                             data=json.loads(row.get('data', '{}')),
-                            request={'id': row.get('request_id')} if row.get('request_id') else None
+                            request_id=row['request_id']
                         )
                         logs.append(log_entry)
                     except Exception as e:
@@ -201,7 +200,7 @@ class LogStorage:
             
             with open(self.config.csv_filename, mode='w', newline='', encoding='utf-8') as f:
                 writer = csv.writer(f)
-                writer.writerow(['id', 'timestamp', 'project', 'level', 'tags', 'message', 'data', 'request'])
+                writer.writerow(['id', 'timestamp', 'project', 'level', 'tags', 'message', 'data', 'request_id'])
                 for log in remaining_logs:
                     writer.writerow([
                         log.id,
@@ -211,7 +210,7 @@ class LogStorage:
                         json.dumps(log.tags),
                         log.message,
                         json.dumps(log.data),
-                        json.dumps(log.request) if log.request else None
+                        log.request_id
                     ])
         except Exception as e:
             pass  # Ignora erros de limpeza
@@ -233,7 +232,7 @@ class LogStorage:
                         json.dumps(log.tags),
                         log.message,
                         json.dumps(log.data),
-                        json.dumps(log.request) if log.request else ''
+                        log.request_id
                     ])
         except Exception as e:
             pass  # Ignora erros de backup
@@ -261,7 +260,7 @@ class LogTransmitter:
                 'timestamp': log_entry.timestamp.isoformat().replace('+00:00', 'Z'),
                 **log_entry.data
             },
-            'request_id': log_entry.request.get('id') if log_entry.request else None
+            'request_id': log_entry.request_id
         }
         
         # Headers para JSON
@@ -302,7 +301,7 @@ class LogTransmitter:
                 'timestamp': log_entry.timestamp.isoformat().replace('+00:00', 'Z'),
                 **log_entry.data
             },
-            'request_id': log_entry.request.get('id') if log_entry.request else None
+            'request_id': log_entry.request_id
         }
         
         # Headers para JSON
@@ -373,7 +372,7 @@ class LogSender:
         self._running = False
         self._thread = None
     
-    def log(self, message: str, project: str = None, level: str = "INFO", tags: List[str] = None, data: Dict[str, Any] = None, request: Optional[Dict[str, Any]] = None) -> bool:
+    def log(self, message: str, project: str = None, level: str = "INFO", tags: List[str] = None, data: Dict[str, Any] = None, request_id: str = None) -> bool:
         """Registra um log"""
         try:
             log_entry = LogEntry(
@@ -382,7 +381,7 @@ class LogSender:
                 level=level,
                 tags=tags or [],
                 data=data or {},
-                request=request
+                request_id=request_id or str(uuid.uuid4())
             )
             
             return self.storage.store_log(log_entry)
