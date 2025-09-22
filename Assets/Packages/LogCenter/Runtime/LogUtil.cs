@@ -9,12 +9,15 @@ using Newtonsoft.Json;
 public class LogUtil : MonoBehaviour
 {
     private static string logFilePath;
+    private static ConfigManager config;
+
     public class DataLogList
     {
         public List<DataLog> logs = new List<DataLog>();
     }
     public static void SaveLogToJson(DataLog dataLog)
     {
+
         string folderPath = Path.Combine(Application.persistentDataPath, "data_logs");
 
         if (!Directory.Exists(folderPath))
@@ -23,7 +26,7 @@ public class LogUtil : MonoBehaviour
         }
 
         string logFilePath = Path.Combine(folderPath, "data_logs.json");
-        
+
         List<DataLog> logList = new List<DataLog>();
 
         if (File.Exists(logFilePath))
@@ -38,7 +41,7 @@ public class LogUtil : MonoBehaviour
         dataLog.timestamp = DateTime.Now;
         logList.Add(dataLog);
 
-        string newJson = JsonConvert.SerializeObject(logList,Formatting.Indented); // 'true' for pretty-print
+        string newJson = JsonConvert.SerializeObject(logList, Formatting.Indented); // 'true' for pretty-print
         File.WriteAllText(logFilePath, newJson);
 
 
@@ -46,28 +49,11 @@ public class LogUtil : MonoBehaviour
     }
     public static IEnumerator GetDatalogFromJsonCoroutine(Action<DataLog> onComplete)
     {
-        string jsonFileName = "datalog.json";
-        string filePath = Path.Combine(Application.streamingAssetsPath, jsonFileName);
-
-#if UNITY_ANDROID
-        string uri = filePath;
-#else
-        string uri = "file://" + filePath;
-#endif
-
-        UnityWebRequest request = UnityWebRequest.Get(uri);
-        yield return request.SendWebRequest();
-
-        if (request.result != UnityWebRequest.Result.Success)
-        {
-            Debug.LogError("Failed to read datalog.json: " + request.error);
-            onComplete?.Invoke(null);
-        }
-        else
-        {
-            string json = request.downloadHandler.text;
-            DataLog dataLog = JsonConvert.DeserializeObject<DataLog>(json);
-            onComplete?.Invoke(dataLog);
-        }
+        config = new();
+        DataLog dataLog = new DataLog();
+        dataLog.id = config.GetValue("Json", "id");
+        dataLog.project = config.GetValue("Json", "project");
+        onComplete?.Invoke(dataLog);
+        yield return null;
     }
 }

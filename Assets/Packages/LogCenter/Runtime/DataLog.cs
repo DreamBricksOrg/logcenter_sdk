@@ -6,7 +6,7 @@ using UnityEngine;
 public class DataLog
 {
     public string id;    
-    public DateTime timestamp;
+    public DateTime? timestamp;
     public string project;
     public string level;
     public List<string> tags;

@@ -16,8 +16,14 @@ public class JsonManager : MonoBehaviour
     private string datalogFolder;
     public int checkIntervalSeconds;
     private string uploadURL;
+    private ConfigManager config;
 
     // Start is called once before the first execution of Update after the MonoBehaviour is created
+    private void Awake()
+    {
+        config = new();
+        uploadURL = config.GetValue("Net", "dbutils");
+    }
     void Start()
     {
         datalogFolder = Path.Combine(Application.persistentDataPath, outputFolder);
@@ -65,9 +71,9 @@ public class JsonManager : MonoBehaviour
                     yield return StartCoroutine(SendData(updatedDataJson, success => sendSuccess = success));
 
                     if (sendSuccess)
-                    {                     
+                    {
                         // Remova a linha do arquivo original
-                        updatedData.RemoveAt(i);                        
+                        updatedData.RemoveAt(i);
 
                         // Reduza o valor de i para lidar com a remo��o da linha
                         i--;
@@ -96,26 +102,24 @@ public class JsonManager : MonoBehaviour
     {
 
         string jsonData = JsonConvert.SerializeObject(dataLog, Formatting.Indented);
-        callback(true);
-        yield return true;
         //form.AddField("Json", jsonData);
 
         // Crie uma requisicao UnityWebRequest para enviar o arquivo
-        // using (UnityWebRequest www = UnityWebRequest.Post(uploadURL, jsonData, "application/json"))
-        // {
-        //     yield return www.SendWebRequest(); // Envie a requisicao
+        using (UnityWebRequest www = UnityWebRequest.Post(uploadURL, jsonData, "application/json"))
+        {
+            yield return www.SendWebRequest(); // Envie a requisicao
 
-        //     if (www.result == UnityWebRequest.Result.Success)
-        //     {
-        //         Debug.Log(string.Format("Arquivo '{0}' enviado com sucesso!", dataLog));
-        //         callback(true);
-        //     }
-        //     else
-        //     {
-        //         Debug.Log(string.Format("Erro ao enviar o arquivo '{0}': {1}", dataLog, www.error));
-        //         callback(false);
-        //     }
-        // }
+            if (www.result == UnityWebRequest.Result.Success)
+            {
+                Debug.Log(string.Format("Arquivo '{0}' enviado com sucesso!", dataLog));
+                callback(true);
+            }
+            else
+            {
+                Debug.Log(string.Format("Erro ao enviar o arquivo '{0}': {1}", dataLog, www.error));
+                callback(false);
+            }
+        }
     }
 
     public static bool CheckForInternetConnection(int timeoutMs = 2000)
