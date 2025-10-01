@@ -8,7 +8,7 @@ using UnityEngine;
 using UnityEngine.Networking;
 using Newtonsoft.Json;
 
-public class JsonManager : MonoBehaviour
+public class JsonManagerSdk : MonoBehaviour
 {
     public string outputFolder;
     private string outputPath;
@@ -16,7 +16,7 @@ public class JsonManager : MonoBehaviour
     private string datalogFolder;
     public int checkIntervalSeconds;
     private string uploadURL;
-    private ConfigManager config;
+    private ConfigManagerSdk config;
 
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     private void Awake()
@@ -50,7 +50,7 @@ public class JsonManager : MonoBehaviour
             {
                 // L� todas as linhas do arquivo Json
                 string allLines = File.ReadAllText(outputPath);
-                List<DataLog> data = JsonConvert.DeserializeObject<List<DataLog>>(allLines);
+                List<DataLogSdk> data = JsonConvert.DeserializeObject<List<DataLogSdk>>(allLines);
 
                 // Verifica se h� linhas de dados no arquivo CSV
                 if (data == null || data?.Count == 0)
@@ -59,11 +59,11 @@ public class JsonManager : MonoBehaviour
                     continue;
                 }
 
-                List<DataLog> updatedData = new List<DataLog>(data);
+                List<DataLogSdk> updatedData = new List<DataLogSdk>(data);
                 File.WriteAllText(backupPath, JsonConvert.SerializeObject(updatedData, Formatting.Indented));
                 for (int i = 0; i < updatedData.Count; i++)
                 {
-                    DataLog updatedDataJson = updatedData[i];
+                    DataLogSdk updatedDataJson = updatedData[i];
                     bool sendSuccess = false;
 
                     Debug.Log(string.Format("processing line '{0}' de '{1}' ", i + 1, updatedData.Count));
@@ -98,7 +98,7 @@ public class JsonManager : MonoBehaviour
         }
     }
 
-    virtual protected IEnumerator SendData(DataLog dataLog, Action<bool> callback)
+    virtual protected IEnumerator SendData(DataLogSdk dataLog, Action<bool> callback)
     {
 
         string jsonData = JsonConvert.SerializeObject(dataLog, Formatting.Indented);

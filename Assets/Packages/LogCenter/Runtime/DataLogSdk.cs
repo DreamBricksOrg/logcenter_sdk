@@ -3,7 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class DataLog
+public class DataLogSdk
 {
     public string id;    
     public DateTime? timestamp;
@@ -14,6 +14,6 @@ public class DataLog
     public object data;
     public string request_id;
 
-    public DataLog() { }
+    public DataLogSdk() { }
 
 }

@@ -56,7 +56,7 @@ public class teste : MonoBehaviour
 
     IEnumerator SaveLogCoroutine(string message, string level, List<string> tags, string additional = "")
     {
-        yield return LogUtil.GetDatalogFromJsonCoroutine((dataLog) =>
+        yield return LogUtilSdk.GetDatalogFromJsonCoroutine((dataLog) =>
         {
             if (dataLog != null)
             {
@@ -64,7 +64,7 @@ public class teste : MonoBehaviour
                 dataLog.level = level;
                 dataLog.tags = tags;
                 dataLog.data = JsonConvert.DeserializeObject(additional);
-                LogUtil.SaveLogToJson(dataLog);
+                LogUtilSdk.SaveLogToJson(dataLog);
             }
             else
             {

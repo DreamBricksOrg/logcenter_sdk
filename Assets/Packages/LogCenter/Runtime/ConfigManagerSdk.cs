@@ -5,13 +5,13 @@ using UnityEngine;
 using UnityEngine.Networking;
 #endif
 
-public class ConfigManager
+public class ConfigManagerSdk
 {
     private Dictionary<string, Dictionary<string, string>> configData;
     private string fileName;
     private string persistentPath;
 
-    public ConfigManager(string fileName = "config.ini")
+    public ConfigManagerSdk(string fileName = "config.ini")
     {
         this.fileName = fileName;
         configData = new Dictionary<string, Dictionary<string, string>>();

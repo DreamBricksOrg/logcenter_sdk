@@ -6,16 +6,16 @@ using System.Collections;
 using System.Collections.Generic;
 using Newtonsoft.Json;
 
-public class LogUtil : MonoBehaviour
+public class LogUtilSdk : MonoBehaviour
 {
     private static string logFilePath;
-    private static ConfigManager config;
+    private static ConfigManagerSdk config;
 
     public class DataLogList
     {
-        public List<DataLog> logs = new List<DataLog>();
+        public List<DataLogSdk> logs = new List<DataLogSdk>();
     }
-    public static void SaveLogToJson(DataLog dataLog)
+    public static void SaveLogToJson(DataLogSdk DataLogSdk)
     {
 
         string folderPath = Path.Combine(Application.persistentDataPath, "data_logs");
@@ -27,19 +27,19 @@ public class LogUtil : MonoBehaviour
 
         string logFilePath = Path.Combine(folderPath, "data_logs.json");
 
-        List<DataLog> logList = new List<DataLog>();
+        List<DataLogSdk> logList = new List<DataLogSdk>();
 
         if (File.Exists(logFilePath))
         {
             string existingJson = File.ReadAllText(logFilePath);
             if (!string.IsNullOrWhiteSpace(existingJson))
             {
-                logList = JsonConvert.DeserializeObject<List<DataLog>>(existingJson);
+                logList = JsonConvert.DeserializeObject<List<DataLogSdk>>(existingJson);
             }
         }
 
-        dataLog.timestamp = DateTime.Now;
-        logList.Add(dataLog);
+        DataLogSdk.timestamp = DateTime.Now;
+        logList.Add(DataLogSdk);
 
         string newJson = JsonConvert.SerializeObject(logList, Formatting.Indented); // 'true' for pretty-print
         File.WriteAllText(logFilePath, newJson);
@@ -47,13 +47,13 @@ public class LogUtil : MonoBehaviour
 
         Debug.Log("Log saved at " + logFilePath);
     }
-    public static IEnumerator GetDatalogFromJsonCoroutine(Action<DataLog> onComplete)
+    public static IEnumerator GetDatalogFromJsonCoroutine(Action<DataLogSdk> onComplete)
     {
         config = new();
-        DataLog dataLog = new DataLog();
-        dataLog.id = config.GetValue("Json", "id");
-        dataLog.project = config.GetValue("Json", "project");
-        onComplete?.Invoke(dataLog);
+        DataLogSdk DataLogSdk = new DataLogSdk();
+        DataLogSdk.id = config.GetValue("Json", "id");
+        DataLogSdk.project = config.GetValue("Json", "project");
+        onComplete?.Invoke(DataLogSdk);
         yield return null;
     }
 }
