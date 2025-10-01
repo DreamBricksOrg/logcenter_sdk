@@ -11,9 +11,5 @@
         "sdk",
         "logcenter"
     ],
-    "repository": {
-		"type": "git",
-		"url": "https://github.com/DreamBricksOrg/logcenter_sdk.git"
-	},
     "license": "MIT"
 }
