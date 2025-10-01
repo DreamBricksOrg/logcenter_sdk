@@ -126,7 +126,7 @@ public class JsonManager : MonoBehaviour
     {
         try
         {
-            string url = "http://www.gstatic.com/generate_204";
+            string url = "https://dbutils.ddns.net";
 
             var request = (HttpWebRequest)WebRequest.Create(url);
             request.KeepAlive = false;
