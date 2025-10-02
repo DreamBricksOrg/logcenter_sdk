@@ -11,6 +11,8 @@ using Newtonsoft.Json;
 public class JsonManagerSdk : MonoBehaviour
 {
     public string outputFolder;
+    public int timeInMinutesAlive = 30;
+    private DateTime timer;
     private string outputPath;
     private string backupPath;
     private string datalogFolder;
@@ -23,6 +25,7 @@ public class JsonManagerSdk : MonoBehaviour
     {
         config = new();
         uploadURL = config.GetValue("Net", "dbutils");
+        timer = DateTime.Now.AddMinutes(timeInMinutesAlive);
     }
     void Start()
     {
@@ -31,6 +34,22 @@ public class JsonManagerSdk : MonoBehaviour
         outputPath = EnsureJsonFilesExist(datalogFolder, "data_logs.json");
         backupPath = EnsureJsonFilesExist(datalogFolder, "data_logs_backup.json");
         StartCoroutine(Worker());
+    }
+
+    void Update()
+    {
+        if (DateTime.Now > timer)
+        {
+            timer = DateTime.Now.AddMinutes(timeInMinutesAlive);
+            bool sendSuccess = false;
+            DataLogSdk dataLog = new DataLogSdk();
+            dataLog.message = "ALIVE";
+            dataLog.level = "INFO";
+            dataLog.id = config.GetValue("Json", "id");
+            dataLog.project = config.GetValue("Json", "project");
+            LogUtilSdk.SaveLogToJson(dataLog);
+            StartCoroutine(SendData(dataLog, success => sendSuccess = success));
+        }
     }
 
     IEnumerator Worker()
