@@ -242,14 +242,34 @@ logs/
 ├── datalogs.csv        # Logs pendentes
 └── datalogs_backup.csv # Backup dos logs enviados
 ```
-
 ### Formato do CSV
 
 ```csv
 id,timestamp,project,level,tags,message,data,request_id
 uuid-123,2024-01-15T10:30:00Z,meu-projeto,info,"[""auth""]",Usuário logado,"{""user_id"": 123}",req-456
 ```
-
+## Atualizar O Pypi
+Antes de subir a atualização é necessario fazer duas coisas.
+Primeiro é necessario alterar a versão do pacote.
+```python
+setup(
+    name='log_center_sdk',
+    version='0.1', #<--- alterar a versão
+    packages=find_packages(),
+    install_requires=[
+        "httpx>=0.24.0",
+        "pydantic>=2.0.0"
+    ],
+)
+```
+Segundo é necessario rodar o seguinte comando para gerar pacote
+```cmd
+python setup.py sdist
+```
+Para subir o pacote no pypi é necessario rodar esse comando
+```cmd
+twine upload dist/*
+```
 ## 🔒 Segurança
 
 - **Headers Customizados**: Suporte a autenticação via headers
