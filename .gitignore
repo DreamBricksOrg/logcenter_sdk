@@ -180,5 +180,3 @@ settings.local.py
 *.pem
 *.p12
 secrets/
-
-app/
