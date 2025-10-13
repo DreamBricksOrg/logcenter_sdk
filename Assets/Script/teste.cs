@@ -21,7 +21,7 @@ public class teste : MonoBehaviour
     struct ListaAditional
     {
         public string user;
-        public string ip;    
+        public string ip;
     }
 
     public void SaveALogStart()
@@ -42,16 +42,16 @@ public class teste : MonoBehaviour
         SaveLog("CADASTRO_EFETUADO", "INFO", tags, JsonConvert.SerializeObject(listaAditional));
     }
 
-        public void SaveALogFinal()
+    public void SaveALogFinal()
     {
         List<String> tags = new List<String>();
         tags.Add("finish");
         SaveLog("FINALIZANDO_PROCESSO", "INFO", tags);
     }
 
-    void SaveLog(string status, string level, List<string> tags, string additional = "")
+    void SaveLog(string message, string level, List<string> tags, string additional = "")
     {
-        StartCoroutine(SaveLogCoroutine(status, level, tags, additional));
+        StartCoroutine(SaveLogCoroutine(message, level, tags, additional));
     }
 
     IEnumerator SaveLogCoroutine(string message, string level, List<string> tags, string additional = "")
@@ -63,7 +63,10 @@ public class teste : MonoBehaviour
                 dataLog.message = message;
                 dataLog.level = level;
                 dataLog.tags = tags;
-                dataLog.data = JsonConvert.DeserializeObject(additional);
+                if (additional != "")
+                    dataLog.data = JsonConvert.DeserializeObject(additional);
+                else
+                    dataLog.data = new object();
                 LogUtilSdk.SaveLogToJson(dataLog);
             }
             else

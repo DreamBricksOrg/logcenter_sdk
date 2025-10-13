@@ -38,7 +38,7 @@ public class LogUtilSdk : MonoBehaviour
             }
         }
 
-        DataLogSdk.timestamp = DateTime.Now;
+        DataLogSdk.timestamp = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ");
         logList.Add(DataLogSdk);
 
         string newJson = JsonConvert.SerializeObject(logList, Formatting.Indented); // 'true' for pretty-print
@@ -51,8 +51,8 @@ public class LogUtilSdk : MonoBehaviour
     {
         config = new();
         DataLogSdk DataLogSdk = new DataLogSdk();
-        DataLogSdk.id = config.GetValue("Json", "id");
-        DataLogSdk.project = config.GetValue("Json", "project");
+        DataLogSdk.project_id = config.GetValue("Json", "id");
+        DataLogSdk.status = "success";
         onComplete?.Invoke(DataLogSdk);
         yield return null;
     }

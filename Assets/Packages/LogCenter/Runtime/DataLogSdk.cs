@@ -5,12 +5,12 @@ using UnityEngine;
 
 public class DataLogSdk
 {
-    public string id;    
-    public DateTime? timestamp;
-    public string project;
+    public string project_id;    
+    public string status;
     public string level;
-    public List<string> tags;
     public string message;
+    public string? timestamp;
+    public List<string> tags;
     public object data;
     public string request_id;
 

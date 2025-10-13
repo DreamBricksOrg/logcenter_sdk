@@ -45,8 +45,7 @@ public class JsonManagerSdk : MonoBehaviour
             DataLogSdk dataLog = new DataLogSdk();
             dataLog.message = "ALIVE";
             dataLog.level = "INFO";
-            dataLog.id = config.GetValue("Json", "id");
-            dataLog.project = config.GetValue("Json", "project");
+            dataLog.project_id = config.GetValue("Json", "id");
             LogUtilSdk.SaveLogToJson(dataLog);
             StartCoroutine(SendData(dataLog, success => sendSuccess = success));
         }
@@ -59,11 +58,11 @@ public class JsonManagerSdk : MonoBehaviour
             yield return new WaitForSeconds(checkIntervalSeconds);
 
             // check if internet is available
-            if (CheckForInternetConnection())
-            {
-                Debug.Log("no internet available");
-                continue;
-            }
+            // if (CheckForInternetConnection())
+            // {
+            //     Debug.Log("no internet available");
+            //     continue;
+            // }
 
             if (File.Exists(outputPath))
             {
