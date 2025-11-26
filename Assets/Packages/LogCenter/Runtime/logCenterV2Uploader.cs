@@ -8,7 +8,7 @@ using UnityEngine;
 using UnityEngine.Networking;
 using Newtonsoft.Json;
 
-public class JsonManagerSdk : MonoBehaviour
+public class logCenterV2Uploader : MonoBehaviour
 {
     public string outputFolder;
     public int timeInMinutesAlive = 30;
@@ -18,7 +18,7 @@ public class JsonManagerSdk : MonoBehaviour
     private string datalogFolder;
     public int checkIntervalSeconds;
     private string uploadURL;
-    private ConfigManagerSdk config;
+    private ConfigManager config;
 
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     private void Awake()

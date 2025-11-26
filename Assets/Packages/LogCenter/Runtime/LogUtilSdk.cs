@@ -9,7 +9,7 @@ using Newtonsoft.Json;
 public class LogUtilSdk : MonoBehaviour
 {
     private static string logFilePath;
-    private static ConfigManagerSdk config;
+    private static ConfigManager config;
 
     public class DataLogList
     {

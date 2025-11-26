@@ -1,6 +1,6 @@
 {
     "name": "com.dreambricks.logcentersdk",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "displayName": "logcentersdk",
     "description": "SDK logcenter unity",
     "unity": "2021.3",
