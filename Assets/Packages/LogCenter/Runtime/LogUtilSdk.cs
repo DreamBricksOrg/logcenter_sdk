@@ -5,6 +5,7 @@ using UnityEngine.Networking;
 using System.Collections;
 using System.Collections.Generic;
 using Newtonsoft.Json;
+using System.Linq;
 
 public class LogUtilSdk : MonoBehaviour
 {
@@ -52,6 +53,7 @@ public class LogUtilSdk : MonoBehaviour
         config = new();
         DataLogSdk DataLogSdk = new DataLogSdk();
         DataLogSdk.project_id = config.GetValue("Json", "id");
+        DataLogSdk.tags = config.GetValue("Json", "tags").Split(new char[] { ','}).Select(t => t.Trim()).Where(t => !string.IsNullOrEmpty(t)).ToList();
         DataLogSdk.status = "success";
         onComplete?.Invoke(DataLogSdk);
         yield return null;

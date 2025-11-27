@@ -28,7 +28,7 @@ public class teste : MonoBehaviour
     {
         List<String> tags = new List<String>();
         tags.Add("start");
-        SaveLog("INICIANDO_PROCESSO", "INFO", tags);
+        StartCoroutine(LogSaver.SaveLog("INICIANDO_PROCESSO", "INFO", tags));
     }
 
     public void SaveALogCadastro()
@@ -39,42 +39,42 @@ public class teste : MonoBehaviour
         ListaAditional listaAditional = new ListaAditional();
         listaAditional.user = "0678";
         listaAditional.ip = "192.168.215.8";
-        SaveLog("CADASTRO_EFETUADO", "INFO", tags, JsonConvert.SerializeObject(listaAditional));
+        StartCoroutine(LogSaver.SaveLog("CADASTRO_EFETUADO", "INFO", tags, JsonConvert.SerializeObject(listaAditional)));
     }
 
     public void SaveALogFinal()
     {
         List<String> tags = new List<String>();
         tags.Add("finish");
-        SaveLog("FINALIZANDO_PROCESSO", "INFO", tags);
+        StartCoroutine(LogSaver.SaveLog("FINALIZANDO_PROCESSO", "INFO", tags));
     }
 
-    void SaveLog(string message, string level, List<string> tags, string additional = "")
-    {
-        StartCoroutine(SaveLogCoroutine(message, level, tags, additional));
-    }
+    // void SaveLog(string message, string level, List<string> tags, string additional = "")
+    // {
+    //     StartCoroutine(SaveLogCoroutine(message, level, tags, additional));
+    // }
 
-    IEnumerator SaveLogCoroutine(string message, string level, List<string> tags, string additional = "")
-    {
-        yield return LogUtilSdk.GetDatalogFromJsonCoroutine((dataLog) =>
-        {
-            if (dataLog != null)
-            {
-                dataLog.message = message;
-                dataLog.level = level;
-                dataLog.tags = tags;
-                if (additional != "")
-                    dataLog.data = JsonConvert.DeserializeObject(additional);
-                else
-                    dataLog.data = new object();
-                LogUtilSdk.SaveLogToJson(dataLog);
-            }
-            else
-            {
-                Debug.LogError("Erro ao carregar o DataLog do JSON.");
-            }
-        });
-    }
+    // IEnumerator SaveLogCoroutine(string message, string level, List<string> tags, string additional = "")
+    // {
+    //     yield return LogUtilSdk.GetDatalogFromJsonCoroutine((dataLog) =>
+    //     {
+    //         if (dataLog != null)
+    //         {
+    //             dataLog.message = message;
+    //             dataLog.level = level;
+    //             dataLog.tags.AddRange(tags);
+    //             if (additional != "")
+    //                 dataLog.data = JsonConvert.DeserializeObject(additional);
+    //             else
+    //                 dataLog.data = new object();
+    //             LogUtilSdk.SaveLogToJson(dataLog);
+    //         }
+    //         else
+    //         {
+    //             Debug.LogError("Erro ao carregar o DataLog do JSON.");
+    //         }
+    //     });
+    // }
 
 
 
