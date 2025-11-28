@@ -40,7 +40,7 @@ public class LogUtilSdk : MonoBehaviour
             }
         }
 
-        DataLogSdk.timestamp = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ");
+        DataLogSdk.timestamp = DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ssZ");
         logList.Add(DataLogSdk);
 
         string newJson = JsonConvert.SerializeObject(logList, Formatting.Indented); // 'true' for pretty-print
