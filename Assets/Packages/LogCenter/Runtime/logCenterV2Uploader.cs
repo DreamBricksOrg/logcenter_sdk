@@ -19,6 +19,7 @@ public class logCenterV2Uploader : MonoBehaviour
     private string datalogFolder;
     public int checkIntervalSeconds;
     private string uploadURL;
+    private string apiKey;
     private ConfigManager config;
 
     // Start is called once before the first execution of Update after the MonoBehaviour is created
@@ -26,6 +27,7 @@ public class logCenterV2Uploader : MonoBehaviour
     {
         config = new();
         uploadURL = config.GetValue("Net", "dbutils");
+        apiKey = config.GetValue("Net", "apiKey");
         timer = DateTime.Now.AddMinutes(timeInMinutesAlive);
     }
     void Start()
@@ -126,6 +128,8 @@ public class logCenterV2Uploader : MonoBehaviour
         // Crie uma requisicao UnityWebRequest para enviar o arquivo
         using (UnityWebRequest www = UnityWebRequest.Post(uploadURL, jsonData, "application/json"))
         {
+            www.SetRequestHeader("X_API_Key", apiKey);
+            Debug.Log("API key header: " + www.GetRequestHeader("X_API_Key"));
             yield return www.SendWebRequest(); // Envie a requisicao
 
             if (www.result == UnityWebRequest.Result.Success)

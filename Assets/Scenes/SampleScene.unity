@@ -1130,7 +1130,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   outputFolder: data_logs
   timeInMinutesAlive: 30
-  checkIntervalSeconds: 120
+  checkIntervalSeconds: 5
 --- !u!4 &1704427465
 Transform:
   m_ObjectHideFlags: 0
