@@ -7,9 +7,8 @@ using System.Net;
 using UnityEngine;
 using UnityEngine.Networking;
 using Newtonsoft.Json;
-using LogCenter;
 
-public class logCenterV2Uploader : MonoBehaviour
+public class LogCenterV2Uploader : MonoBehaviour
 {
     public string outputFolder;
     public int timeInMinutesAlive = 30;

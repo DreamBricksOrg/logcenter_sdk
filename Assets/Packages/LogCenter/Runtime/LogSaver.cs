@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using Newtonsoft.Json;
 
-public class LogSaver : MonoBehaviour
+public static class LogSaver
 {   
     public static IEnumerator SaveLog(string message, string level, List<string>? tags = null, string additional = "")
     {

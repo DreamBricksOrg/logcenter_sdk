@@ -6,8 +6,8 @@ using System.Collections;
 using System.Collections.Generic;
 using Newtonsoft.Json;
 using System.Linq;
-using LogCenter;
-
+using Newtonsoft.Json.Serialization;
+using Newtonsoft.Json.Linq;
 public class LogUtilSdk : MonoBehaviour
 {
     private static string logFilePath;
@@ -33,10 +33,17 @@ public class LogUtilSdk : MonoBehaviour
 
         if (File.Exists(logFilePath))
         {
-            string existingJson = File.ReadAllText(logFilePath);
-            if (!string.IsNullOrWhiteSpace(existingJson))
+            if (isJsonCorrupted(logFilePath))
             {
-                logList = JsonConvert.DeserializeObject<List<DataLogSdk>>(existingJson);
+                File.WriteAllText(logFilePath, "[]");
+            }
+            else
+            {
+                string existingJson = File.ReadAllText(logFilePath);
+                if (!string.IsNullOrWhiteSpace(existingJson))
+                {
+                    logList = JsonConvert.DeserializeObject<List<DataLogSdk>>(existingJson);
+                }
             }
         }
 
@@ -54,9 +61,30 @@ public class LogUtilSdk : MonoBehaviour
         config = new();
         DataLogSdk DataLogSdk = new DataLogSdk();
         DataLogSdk.project_id = config.GetValue("Json", "id");
-        DataLogSdk.tags = config.GetValue("Json", "tags").Split(new char[] { ','}).Select(t => t.Trim()).Where(t => !string.IsNullOrEmpty(t)).ToList();
+        DataLogSdk.tags = config.GetValue("Json", "tags").Split(new char[] { ',' }).Select(t => t.Trim()).Where(t => !string.IsNullOrEmpty(t)).ToList();
         DataLogSdk.status = "success";
         onComplete?.Invoke(DataLogSdk);
         yield return null;
     }
+
+    static bool isJsonCorrupted(string filePath)
+    {
+        try
+        {
+            string jsonContent = File.ReadAllText(filePath);
+            JToken.Parse(jsonContent);
+            return false;
+        }
+        catch (JsonReaderException ex)
+        {
+            Console.WriteLine($"JSON file corruption detected: {ex.Message}");
+            return true;
+        }
+        catch (IOException ex)
+        {
+            Console.WriteLine($"File reading error: {ex.Message}");
+            return true;
+        }
+    }
+
 }
