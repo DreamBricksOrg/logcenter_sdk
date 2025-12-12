@@ -8,6 +8,8 @@ using Newtonsoft.Json;
 using System.Linq;
 using Newtonsoft.Json.Serialization;
 using Newtonsoft.Json.Linq;
+using LogCenter;
+
 public class LogUtilSdk : MonoBehaviour
 {
     private static string logFilePath;

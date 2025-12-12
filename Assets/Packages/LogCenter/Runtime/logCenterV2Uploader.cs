@@ -7,7 +7,7 @@ using System.Net;
 using UnityEngine;
 using UnityEngine.Networking;
 using Newtonsoft.Json;
-
+using LogCenter;
 public class LogCenterV2Uploader : MonoBehaviour
 {
     public string outputFolder;
