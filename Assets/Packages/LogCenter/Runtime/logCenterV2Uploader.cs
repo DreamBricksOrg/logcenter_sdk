@@ -25,8 +25,8 @@ public class LogCenterV2Uploader : MonoBehaviour
     private void Awake()
     {
         config = new();
-        uploadURL = config.GetValue("Net", "dbutils");
-        apiKey = config.GetValue("Net", "apiKey");
+        uploadURL = config.GetValue("DataLog", "Url", " ");
+        apiKey = config.GetValue("DataLog", "ApiKey", " ");
         timer = DateTime.Now.AddMinutes(timeInMinutesAlive);
     }
     void Start()
@@ -47,7 +47,7 @@ public class LogCenterV2Uploader : MonoBehaviour
             DataLogSdk dataLog = new DataLogSdk();
             dataLog.message = "ALIVE";
             dataLog.level = "INFO";
-            dataLog.project_id = config.GetValue("Json", "id");
+            dataLog.project_id = config.GetValue("DataLog", "ProjectId");
             LogUtilSdk.SaveLogToJson(dataLog);
             StartCoroutine(SendData(dataLog, success => sendSuccess = success));
         }

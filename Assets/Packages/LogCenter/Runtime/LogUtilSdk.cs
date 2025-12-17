@@ -1,12 +1,10 @@
 using System;
 using System.IO;
 using UnityEngine;
-using UnityEngine.Networking;
 using System.Collections;
 using System.Collections.Generic;
 using Newtonsoft.Json;
 using System.Linq;
-using Newtonsoft.Json.Serialization;
 using Newtonsoft.Json.Linq;
 using LogCenter;
 
@@ -62,8 +60,8 @@ public class LogUtilSdk : MonoBehaviour
     {
         config = new();
         DataLogSdk DataLogSdk = new DataLogSdk();
-        DataLogSdk.project_id = config.GetValue("Json", "id");
-        DataLogSdk.tags = config.GetValue("Json", "tags").Split(new char[] { ',' }).Select(t => t.Trim()).Where(t => !string.IsNullOrEmpty(t)).ToList();
+        DataLogSdk.project_id = config.GetValue("DataLog", "ProjectId", " ");
+        DataLogSdk.tags = config.GetValue("DataLog", "Tags", " ").Split(new char[] { ',' }).Select(t => t.Trim()).Where(t => !string.IsNullOrEmpty(t)).ToList();
         DataLogSdk.status = "success";
         onComplete?.Invoke(DataLogSdk);
         yield return null;
