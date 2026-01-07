@@ -1,0 +1,14 @@
+[project]
+name = "logcenter-sdk"
+version = "0.1.0"
+description = "LogCenter SDK (offline spool + async sender)"
+requires-python = ">=3.10"
+dependencies = [
+  "httpx>=0.25",
+  "uvicorn>=0.22",
+  "starlette>=0.27",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
