@@ -1,19 +1,20 @@
 # LogCenter SDK (Python)
 
-SDK oficial para envio de logs ao **LogCenter**, projetado para ser utilizado como biblioteca em qualquer aplicação da empresa, sem replicação de código e com foco em **resiliência, padronização e observabilidade**.
+SDK oficial para envio de logs ao **LogCenter**, projetado para ser utilizado como biblioteca em aplicações Python da empresa, com foco em **padronização, observabilidade e baixo acoplamento**.
+
+> ⚠️ **Importante**: a versão atual **NÃO é offline-first por padrão**. O spool (fila em arquivo) existe no SDK, mas **só é usado se você optar por isso**. Por default, o SDK tenta enviar e falha silenciosamente se a API estiver indisponível.
 
 ---
 
 ## ✨ Principais Características
 
--   Envio de logs estruturados para o LogCenter
--   Compatível com o **LogCenter V2**
--   **Offline-first**: logs são armazenados localmente em caso de falha de rede
--   Retry automático com backoff exponencial
--   Envio em lote (batch)
--   Totalmente compatível com os filtros do `/dash`
--   Pode rodar em background (thread dedicada)
--   Uso simples, sem acoplamento com frameworks
+* Envio de logs estruturados para o LogCenter (V2)
+* Contrato compatível com o schema oficial `LogCreate`
+* Uso independente de framework (FastAPI, Flask, Django, workers, scripts, etc.)
+* Suporte a **middleware ASGI** para auditoria automática
+* Timestamp controlável (inclusive igualdade exata no `/dash`)
+* Integração simples via código ou variáveis de ambiente
+* **Spool opcional em arquivo** (desativável por chamada)
 
 ---
 
@@ -25,20 +26,38 @@ pip install logcenter-sdk
 
 ---
 
-## 🔧 Configuração Básica
+## 🔧 Configuração
+
+### Configuração via código (recomendada)
 
 ```python
-from logcenter_sdk import LogSender, LogSenderConfigconfig = LogSenderConfig(    log_api="https://logcenter.suaempresa.com",    project_id="69374094b758aa497f59cf1b",    upload_delay=10,)log_sender = LogSender(config)
+from logcenter_sdk.config import LogCenterConfig
+from logcenter_sdk.sender import LogCenterSender
+
+cfg = LogCenterConfig(
+    base_url="LOGCENTER_URL",
+    project_id="LOGCENTER_PROJECT_ID",
+    api_key="LOGCENTER_API_KEY",  # opcional
+    enabled=True,
+)
+
+sender = LogCenterSender(cfg)
 ```
 
-Também é possível configurar via variáveis de ambiente:
+### Configuração via variáveis de ambiente
 
 ```bash
-export LOG_API=https://logcenter.suaempresa.comexport PROJECT_ID=69374094b758aa497f59cf1b
+export LOGCENTER_BASE_URL="LOGCENTER_URL"
+export LOGCENTER_PROJECT_ID="LOGCENTER_PROJECT_ID"
+export LOGCENTER_API_KEY="LOGCENTER_API_KEY"
 ```
 
 ```python
-from logcenter_sdk import create_log_sender_from_envlog_sender = create_log_sender_from_env()
+from logcenter_sdk.config import LogCenterConfig
+from logcenter_sdk.sender import LogCenterSender
+
+cfg = LogCenterConfig.from_env()
+sender = LogCenterSender(cfg)
 ```
 
 ---
@@ -48,101 +67,56 @@ from logcenter_sdk import create_log_sender_from_envlog_sender = create_log_send
 O SDK envia logs compatíveis com o schema oficial da API:
 
 ```json
-{  "project_id": "string (Mongo ObjectId)",  "status": "string",  "level": "INFO | WARN | ERROR | ...",  "message": "string",  "timestamp": "ISO-8601 (opcional)",  "tags": ["string"],  "data": { "any": "value" },  "request_id": "string | null"}
+{
+  "project_id": "string (Mongo ObjectId)",
+  "status": "string",
+  "level": "INFO | WARN | ERROR | ...",
+  "message": "string",
+  "timestamp": "ISO-8601 (opcional)",
+  "tags": ["string"],
+  "data": { "any": "value" },
+  "request_id": "string | null"
+}
 ```
 
-### Regras Importantes
+### Regras importantes
 
--   `timestamp` é **top-level**
--   Se `timestamp` não for enviado, o servidor preencherá automaticamente
--   Campos extras são ignorados pela API
--   O SDK sempre envia dados compatíveis com esse contrato
+* `timestamp` é **top-level**
+* Se `timestamp` não for enviado, o SDK preenche automaticamente
+* Campos extras são ignorados pela API
+* O SDK **não envia `timestamp` dentro de `data`**
 
 ---
 
 ## 🚀 Enviando Logs
 
-### Exemplo básico
+### Envio básico
 
 ```python
-log_sender.log(    message="Usuário logado com sucesso",    level="INFO",    tags=["auth", "backend"],    data={        "user_id": 123,        "campaign": "BlackFriday"    },    request={"id": "req-abc-123"})
+await sender.send(
+    level="INFO",
+    message="Usuário logado com sucesso",
+    tags=["auth", "backend"],
+    data={
+        "user_id": 123,
+        "campaign": "BlackFriday",
+    },
+)
 ```
 
-### Enviando log com timestamp explícito
+### Timestamp explícito (igualdade exata no dashboard)
 
 ```python
-log_sender.log(    message="Evento com timestamp exato",    level="INFO",    timestamp="2025-12-08T21:16:12Z",    tags=["special", "equality-test"],    data={"marker": "TS_EQ"})
+await sender.send(
+    level="INFO",
+    message="Evento com timestamp exato",
+    timestamp="2025-12-08T21:16:12Z",
+    tags=["special", "equality-test"],
+    data={"marker": "TS_EQ"},
+)
 ```
 
-> Isso permite filtros exatos como `?timestamp=2025-12-08T21:16:12Z` no dashboard.
-
----
-
-## 🌐 Modo Offline & Resiliência
-
-O SDK é **offline-first por design**.
-
-### Como funciona
-
--   Todo log é **salvo localmente antes do envio**
-    
--   Se a API estiver indisponível:
-    
-    -   o log permanece no arquivo local
-    -   o SDK tenta reenviar automaticamente
--   Quando a conexão retorna:
-    
-    -   os logs pendentes são reenviados em lote
-
-### Estrutura de arquivos
-
-```text
-logs/├── datalogs.csv        # logs pendentes└── datalogs_backup.csv # logs enviados com sucesso
-```
-
-Nenhum log é perdido.
-
----
-
-## 🔁 Envio em Background
-
-O SDK pode rodar um worker em background para envio contínuo:
-
-```python
-log_sender.start_background_sender()
-```
-
-Para parar:
-
-```python
-log_sender.stop_background_sender()
-```
-
-Também pode ser usado como context manager:
-
-```python
-with log_sender:    log_sender.log("Aplicação iniciada")
-```
-
----
-
-## 📊 Compatibilidade com Dashboard (/dash)
-
-Todos os logs enviados pelo SDK são **100% compatíveis** com os filtros do dashboard.
-
-### Exemplos de filtros suportados
-
-```http
-?level=ERROR?level__in=INFO,ERROR?message__regex=timeout|cache?data.campaign=Christmas?data.region=BR
-```
-
-### Filtros por data
-
-```http
-?timestamp__gte=2025-12-08T20:00:00Z&amp;timestamp__lte=2025-12-08T22:00:00Z
-```
-
-### Igualdade exata de timestamp
+Permite consultas como:
 
 ```http
 ?timestamp=2025-12-08T21:16:12Z
@@ -150,66 +124,124 @@ Todos os logs enviados pelo SDK são **100% compatíveis** com os filtros do das
 
 ---
 
-## ⚠️ Atenção (Campos Legados)
+## 🔁 Spool (fila offline) – **opcional**
 
-Campos antigos **não devem mais ser usados**:
+O SDK possui suporte a spool em arquivo (`jsonl`), mas **não é obrigatório usar**.
 
-❌ Antigo
+### Comportamento padrão
 
-✅ Atual
+* O SDK tenta enviar o log
+* Se falhar, **NÃO spoola**, a menos que você permita
 
-`project`
-
-`project_id`
-
-`request`
-
-`request_id`
-
-`timestamp` dentro de `data`
-
-`timestamp` top-level
-
----
-
-## 📈 Estatísticas do SDK
+### Habilitando spool por chamada
 
 ```python
-stats = log_sender.get_stats()
+await sender.send(
+    level="ERROR",
+    message="Falha crítica",
+    spool_on_fail=True,
+)
 ```
 
-Exemplo de retorno:
+### Reenvio manual do spool
 
-```json
-{  "pending_logs": 3,  "running": true,  "config": {    "project_id": "...",    "upload_delay": 10,    "batch_size": 100,    "enable_async": true  }}
+```python
+await sender.flush_spool()
+```
+
+### Background flush (opcional)
+
+```python
+sender.start_background_flush()
+```
+
+Encerramento:
+
+```python
+await sender.stop_background_flush()
 ```
 
 ---
 
-## 🧪 Ambientes Indicados
+## 🧱 Middleware ASGI (FastAPI / Starlette)
 
--   Backend services
--   Workers
--   APIs
--   Jobs batch
--   Scripts de automação
--   Aplicações Flask / FastAPI / Django
+O SDK fornece um middleware de auditoria HTTP.
+
+```python
+from logcenter_sdk.middleware import LogCenterAuditMiddleware
+
+app.add_middleware(
+    LogCenterAuditMiddleware,
+    sender=sender,
+)
+```
+
+### O que o middleware faz
+
+* Loga automaticamente:
+
+  * exceções não tratadas
+  * respostas HTTP 5xx
+* NÃO interfere no fluxo da aplicação
+* NÃO exige spool
+
+---
+
+## 📊 Compatibilidade com Dashboard (/dash)
+
+Todos os logs enviados são compatíveis com os filtros atuais.
+
+### Exemplos
+
+```http
+?level=ERROR
+?level__in=INFO,ERROR
+?message__regex=timeout|cache
+?data.campaign=Christmas
+?data.region=BR
+```
+
+### Janela de tempo
+
+```http
+?timestamp__gte=2025-12-08T20:00:00Z&timestamp__lte=2025-12-08T22:00:00Z
+```
+
+---
+
+## ⚠️ Campos Legados (NÃO usar)
+
+| Antigo                | Correto               |
+| --------------------- | --------------------- |
+| `project`             | `project_id`          |
+| `request`             | `request_id`          |
+| `timestamp` em `data` | `timestamp` top-level |
+
+---
+
+## 🧪 Onde usar
+
+* APIs (FastAPI, Flask, Django)
+* Workers / consumers
+* Jobs batch
+* Scripts administrativos
+* Serviços internos
 
 ---
 
 ## 📌 Versão
 
 ```
-0.1.6-dev
+0.1-dev
 ```
 
-> Versão alinhada com LogCenter V2, filtros avançados e dashboard unificado.
+Alinhado com LogCenter V2 e dashboard unificado.
 
 ---
 
-## 🛣️ Roadmap (não implementado ainda)
+## 🛣️ Roadmap
 
--   Integração opcional com `structlog`
--   Buffer
--   Compressão de batches
--   SDK JS / Node.js
+* Integração opcional com `structlog`
+* Métricas internas do SDK
+* Compressão de batches
+* Buffer
