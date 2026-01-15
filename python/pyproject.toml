@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "logcenter-sdk"
-version = "0.1.dev"
+version = "0.1.0.dev"
 description = "SDK oficial para envio de logs ao LogCenter"
 readme = "README.md"
 requires-python = ">=3.9"
