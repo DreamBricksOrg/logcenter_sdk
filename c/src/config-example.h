@@ -1,0 +1,10 @@
+#pragma once
+
+// WiFi
+#define WIFI_SSID "SEU_WIFI"
+#define WIFI_PASS "SUA_SENHA"
+
+// LogCenter
+#define LOGCENTER_BASE_URL "SUA_URL_DE_LOGCENTER"
+#define LOGCENTER_PROJECT_ID "SEU_PROJECT_ID"
+#define LOGCENTER_API_KEY "SUA_API_KEY"
