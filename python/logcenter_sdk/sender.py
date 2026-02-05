@@ -105,6 +105,35 @@ class LogCenterSender:
             self.spool.append(payload)
         return False
 
+    def send_spool(
+        self,
+        level: str,
+        message: str,
+        *,
+        timestamp: Optional[str] = None,
+        tags: Optional[List[str]] = None,
+        data: Optional[Dict[str, Any]] = None,
+        request_id: Optional[str] = None,
+        status: Optional[str] = None,
+        project_id: Optional[str] = None,
+        spool_on_fail: bool = True,
+    ):
+        if not self.cfg.enabled:
+            return False
+
+        payload = self._build_payload(
+            level,
+            message,
+            timestamp=timestamp,
+            tags=tags,
+            data=data,
+            request_id=request_id,
+            status=status,
+            project_id=project_id,
+        )
+        
+        self.spool.append(payload)
+
     def send_sync(self, *args, **kwargs) -> bool:
         try:
             loop = asyncio.get_running_loop()
