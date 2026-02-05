@@ -31,17 +31,34 @@ pip install logcenter-sdk
 ### Configuração via código (recomendada)
 
 ```python
-from logcenter_sdk.config import LogCenterConfigfrom logcenter_sdk.sender import LogCenterSendercfg = LogCenterConfig(    base_url="LOGCENTER_URL",    project_id="LOGCENTER_PROJECT_ID",    api_key="LOGCENTER_API_KEY",  # opcional    enabled=True,)sender = LogCenterSender(cfg)
+from logcenter_sdk.config import LogCenterConfig
+from logcenter_sdk.sender import LogCenterSender
+
+cfg = LogCenterConfig(
+    base_url="LOGCENTER_URL",
+    project_id="LOGCENTER_PROJECT_ID",
+    api_key="LOGCENTER_API_KEY",  # opcional
+    enabled=True,
+)
+
+sender = LogCenterSender(cfg)
 ```
 
 ### Configuração via variáveis de ambiente
 
 ```bash
-export LOGCENTER_BASE_URL="LOGCENTER_URL"export LOGCENTER_PROJECT_ID="LOGCENTER_PROJECT_ID"export LOGCENTER_API_KEY="LOGCENTER_API_KEY"
+export LOGCENTER_BASE_URL="LOGCENTER_URL"
+export LOGCENTER_PROJECT_ID="LOGCENTER_PROJECT_ID"
+export LOGCENTER_API_KEY="LOGCENTER_API_KEY"
 ```
 
 ```python
-from logcenter_sdk.config import LogCenterConfigfrom logcenter_sdk.sender import LogCenterSendercfg = LogCenterConfig.from_env()sender = LogCenterSender(cfg)
+from logcenter_sdk.config import LogCenterConfig
+from logcenter_sdk.sender import LogCenterSender
+
+cfg = LogCenterConfig.from_env()
+
+sender = LogCenterSender(cfg)
 ```
 
 ---
@@ -51,7 +68,16 @@ from logcenter_sdk.config import LogCenterConfigfrom logcenter_sdk.sender import
 O SDK envia logs compatíveis com o schema oficial da API:
 
 ```json
-{  "project_id": "string (Mongo ObjectId)",  "status": "string",  "level": "INFO | WARN | ERROR | ...",  "message": "string",  "timestamp": "ISO-8601 (opcional)",  "tags": ["string"],  "data": { "any": "value" },  "request_id": "string | null"}
+{
+  "project_id": "string (Mongo ObjectId)",
+  "status": "string",
+  "level": "INFO | WARN | ERROR | ...",
+  "message": "string",
+  "timestamp": "ISO-8601 (opcional)",
+  "tags": ["string"],
+  "data": { "any": "value" },
+  "request_id": "string | null"
+}
 ```
 
 ### Regras importantes
@@ -68,13 +94,27 @@ O SDK envia logs compatíveis com o schema oficial da API:
 ### Envio básico
 
 ```python
-await sender.send(    level="INFO",    message="Usuário logado com sucesso",    tags=["auth", "backend"],    data={        "user_id": 123,        "campaign": "BlackFriday",    },)
+await sender.send(
+    level="INFO",
+    message="Usuário logado com sucesso",
+    tags=["auth", "backend"],
+    data={
+        "user_id": 123,
+        "campaign": "BlackFriday",
+    },
+)
 ```
 
 ### Timestamp explícito (igualdade exata no dashboard)
 
 ```python
-await sender.send(    level="INFO",    message="Evento com timestamp exato",    timestamp="2025-12-08T21:16:12Z",    tags=["special", "equality-test"],    data={"marker": "TS_EQ"},)
+await sender.send(
+    level="INFO",
+    message="Evento com timestamp exato",
+    timestamp="2025-12-08T21:16:12Z",
+    tags=["special", "equality-test"],
+    data={"marker": "TS_EQ"},
+)
 ```
 
 Permite consultas como:
@@ -97,7 +137,11 @@ O SDK possui suporte a spool em arquivo (`jsonl`), mas **não é obrigatório us
 ### Habilitando spool por chamada
 
 ```python
-await sender.send(    level="ERROR",    message="Falha crítica",    spool_on_fail=True,)
+await sender.send(
+    level="ERROR",
+    message="Falha crítica",
+    spool_on_fail=True,
+)
 ```
 
 ### Reenvio manual do spool
@@ -125,7 +169,12 @@ await sender.stop_background_flush()
 O SDK fornece um middleware de auditoria HTTP.
 
 ```python
-from logcenter_sdk.middleware import LogCenterAuditMiddlewareapp.add_middleware(    LogCenterAuditMiddleware,    sender=sender,)
+from logcenter_sdk.middleware import LogCenterAuditMiddleware
+
+app.add_middleware(
+    LogCenterAuditMiddleware,
+    sender=sender,
+)
 ```
 
 ### O que o middleware faz
