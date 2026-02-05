@@ -25,17 +25,65 @@ class LogCenterConfig:
     enabled: bool = True
 
     @staticmethod
-    def from_env(prefix: str = "LOGCENTER_") -> "LogCenterConfig":
-        base_url = (os.getenv(f"{prefix}BASE_URL") or "").rstrip("/")
-        project_id = os.getenv(f"{prefix}PROJECT_ID") or ""
-        api_key = os.getenv(f"{prefix}API_KEY")
+    def _load_env_file_values() -> Dict[str, str]:
+        for filename in (".env", "env"):
+            env_path = Path.cwd() / filename
+            if not env_path.is_file():
+                continue
 
-        timeout_s = float(os.getenv(f"{prefix}TIMEOUT_S", "10"))
-        spool_dir = Path(os.getenv(f"{prefix}SPOOL_DIR", ".logcenter"))
-        spool_max_bytes = int(os.getenv(f"{prefix}SPOOL_MAX_BYTES", str(25 * 1024 * 1024)))
-        flush_batch_size = int(os.getenv(f"{prefix}FLUSH_BATCH_SIZE", "200"))
-        flush_interval_s = float(os.getenv(f"{prefix}FLUSH_INTERVAL_S", "10"))
-        enabled = os.getenv(f"{prefix}ENABLED", "true").lower() in ("1", "true", "yes", "y")
+            values: Dict[str, str] = {}
+            for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+                line = raw_line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+
+                key, value = line.split("=", 1)
+                key = key.strip()
+                value = value.strip()
+
+                if not key:
+                    continue
+
+                if len(value) >= 2 and value[0] == value[-1] and value[0] in ("\"", "'"):
+                    value = value[1:-1]
+
+                values[key] = value
+
+            return values
+
+        return {}
+
+    @staticmethod
+    def _get_prefixed_value(values: Dict[str, str], prefix: str, key: str, default: Optional[str] = None) -> Optional[str]:
+        env_key = f"{prefix}{key}"
+        if env_key in values:
+            return values[env_key]
+        return os.getenv(env_key, default)
+
+    @staticmethod
+    def from_env(prefix: str = "LOGCENTER_") -> "LogCenterConfig":
+        file_values = LogCenterConfig._load_env_file_values()
+
+        base_url = (LogCenterConfig._get_prefixed_value(file_values, prefix, "BASE_URL", "") or "").rstrip("/")
+        project_id = LogCenterConfig._get_prefixed_value(file_values, prefix, "PROJECT_ID", "") or ""
+        api_key = LogCenterConfig._get_prefixed_value(file_values, prefix, "API_KEY")
+
+        timeout_s = float(LogCenterConfig._get_prefixed_value(file_values, prefix, "TIMEOUT_S", "10") or "10")
+        spool_dir = Path(LogCenterConfig._get_prefixed_value(file_values, prefix, "SPOOL_DIR", ".logcenter") or ".logcenter")
+        spool_max_bytes = int(
+            LogCenterConfig._get_prefixed_value(file_values, prefix, "SPOOL_MAX_BYTES", str(25 * 1024 * 1024))
+            or str(25 * 1024 * 1024)
+        )
+        flush_batch_size = int(LogCenterConfig._get_prefixed_value(file_values, prefix, "FLUSH_BATCH_SIZE", "200") or "200")
+        flush_interval_s = float(
+            LogCenterConfig._get_prefixed_value(file_values, prefix, "FLUSH_INTERVAL_S", "10") or "10"
+        )
+        enabled = (LogCenterConfig._get_prefixed_value(file_values, prefix, "ENABLED", "true") or "true").lower() in (
+            "1",
+            "true",
+            "yes",
+            "y",
+        )
 
         if not base_url or not project_id:
             raise ValueError("Missing LOGCENTER_BASE_URL or LOGCENTER_PROJECT_ID")
