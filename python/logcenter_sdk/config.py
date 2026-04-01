@@ -21,6 +21,8 @@ class LogCenterConfig:
     spool_max_bytes: int = 25 * 1024 * 1024  # 25MB
     flush_batch_size: int = 200
     flush_interval_s: float = 10.0
+    flush_threshold_count: int = 0  # 0 = disabled; auto-flush after N messages in spool
+    auto_flush: bool = False  # auto-start background flush thread on init
 
     enabled: bool = True
 
@@ -35,6 +37,8 @@ class LogCenterConfig:
         spool_max_bytes = int(os.getenv(f"{prefix}SPOOL_MAX_BYTES", str(25 * 1024 * 1024)))
         flush_batch_size = int(os.getenv(f"{prefix}FLUSH_BATCH_SIZE", "200"))
         flush_interval_s = float(os.getenv(f"{prefix}FLUSH_INTERVAL_S", "10"))
+        flush_threshold_count = int(os.getenv(f"{prefix}FLUSH_THRESHOLD_COUNT", "0"))
+        auto_flush = os.getenv(f"{prefix}AUTO_FLUSH", "false").lower() in ("1", "true", "yes", "y")
         enabled = os.getenv(f"{prefix}ENABLED", "true").lower() in ("1", "true", "yes", "y")
 
         if not base_url or not project_id:
@@ -49,5 +53,7 @@ class LogCenterConfig:
             spool_max_bytes=spool_max_bytes,
             flush_batch_size=flush_batch_size,
             flush_interval_s=flush_interval_s,
+            flush_threshold_count=flush_threshold_count,
+            auto_flush=auto_flush,
             enabled=enabled,
         )
