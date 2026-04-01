@@ -1,0 +1,52 @@
+{
+  "name": "@dreambricks/logcenter-sdk",
+  "version": "0.1.0-dev.0",
+  "description": "SDK oficial do LogCenter para Node.js (ESM + CJS) com spool offline (JSONL) e middleware.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./express": {
+      "types": "./dist/express.d.ts",
+      "import": "./dist/express.js",
+      "require": "./dist/express.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts src/express.ts --format esm,cjs --dts",
+    "dev": "tsup src/index.ts src/express.ts --watch --format esm,cjs --dts",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "express": "^5.2.1",
+    "undici": "^6.23.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.0.10",
+    "tsup": "^8.0.0",
+    "typescript": "^5.4.0"
+  },
+  "keywords": [
+    "logcenter",
+    "logging",
+    "observability",
+    "sdk"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dreambricks/logcenter_sdk"
+  }
+}
