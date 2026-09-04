@@ -18,7 +18,7 @@ class LogCenterHttpClient:
             "Content-Type": "application/json",
         }
         if self.api_key:
-            h["x_api_key"] = self.api_key
+            h["X-API-Key"] = self.api_key
         return h
 
     async def post_log(self, payload: Dict[str, Any]) -> httpx.Response:
