@@ -484,6 +484,33 @@ def test_send_async(tmp_dir: Path) -> None:
     asyncio.run(run())
 
 
+def test_background_thread_survives_exception(tmp_dir: Path) -> None:
+    section("_thread_flush_loop() - survives exception from process_pending_sync")
+
+    cfg = make_config(tmp_dir, flush_interval_s=0.1)
+    sender = LogCenterSender(cfg)
+
+    call_count: List[int] = []
+
+    def flaky_process_pending_sync():
+        call_count.append(1)
+        if len(call_count) == 1:
+            raise RuntimeError("boom")
+        return {"sent": 0, "corrupted": 0, "remaining": 0}
+
+    with patch.object(sender, "process_pending_sync", side_effect=flaky_process_pending_sync):
+        sender.start_background_flush_thread()
+        time.sleep(0.5)
+        check("thread still alive after exception on first tick",
+              sender._bg_thread is not None and sender._bg_thread.is_alive())
+        check("process_pending_sync called more than once", len(call_count) > 1,
+              f"call_count={len(call_count)}")
+        sender.stop_background_flush_thread(timeout=2.0)
+
+    check("background thread stopped cleanly",
+          sender._bg_thread is None or not sender._bg_thread.is_alive())
+
+
 def test_flush_threshold(tmp_dir: Path) -> None:
     section("flush_threshold_count - auto-trigger on count")
 

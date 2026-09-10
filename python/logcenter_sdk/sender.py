@@ -124,11 +124,7 @@ class LogCenterSender:
             request_id=request_id, status=status, project_id=project_id,
         )
 
-        try:
-            resp = self.http.post_log_sync(payload)
-            ok = 200 <= resp.status_code < 300
-        except Exception:
-            ok = False
+        ok = self._post_log_bool(payload)
 
         if ok:
             self.spool.append_backup(payload)
@@ -179,6 +175,9 @@ class LogCenterSender:
 
     def _thread_flush_loop(self) -> None:
         while not self._thread_stop_event.is_set():
-            self.process_pending_sync()
+            try:
+                self.process_pending_sync()
+            except Exception:
+                pass
             self._thread_wake_event.wait(timeout=self.cfg.flush_interval_s)
             self._thread_wake_event.clear()
