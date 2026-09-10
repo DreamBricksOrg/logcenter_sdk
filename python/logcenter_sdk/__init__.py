@@ -3,4 +3,4 @@ from .sender import LogCenterSender
 from .middleware import LogCenterAuditMiddleware
 
 __all__ = ["LogCenterConfig", "LogCenterSender", "LogCenterAuditMiddleware"]
-__version__ = "0.1.1"
+__version__ = "0.2.0"

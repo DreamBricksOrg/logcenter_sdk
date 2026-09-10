@@ -4,6 +4,16 @@ SDK oficial para envio de logs ao **LogCenter**, projetado para ser utilizado co
 
 > ⚠️ **Importante**: `send()` / `send_sync()` tentam o envio HTTP direto e, em **qualquer falha** (status não-2xx, erro de rede, config inválida), gravam o payload em `data_logs.jsonl` — isso é automático e incondicional, não há parâmetro para desativar. O reenvio desses itens pendentes, porém, **não é automático por si só**: só acontece através da thread de background (`sender.start_background_flush_thread()` ou `LogCenterConfig(auto_flush=True)`). Se você nunca iniciar essa thread, os itens pendentes apenas se acumulam em `data_logs.jsonl` até que você a inicie ou chame `sender.process_pending_sync()` manualmente.
 
+## 🚨 Breaking changes (a partir da 0.2.0)
+
+Se você está atualizando de uma versão anterior à `0.2.0`, os seguintes itens **não existem mais**:
+
+-   Métodos `send_spool()`, `flush_spool()` / `flush_spool_sync()` e o par assíncrono sem argumentos `start_background_flush()` / `stop_background_flush()`
+-   Parâmetro `spool_on_fail`
+-   Campos de `LogCenterConfig`: `spool_filename`, `spool_max_bytes`, `flush_batch_size`, `flush_threshold_count`
+
+Veja a seção [🔁 Spool (fila offline)](#-spool-fila-offline) abaixo para o comportamento atual equivalente.
+
 ---
 
 ## ✨ Principais Características
@@ -245,7 +255,7 @@ Correto
 ## 📌 Versão
 
 ```
-0.1.0-dev
+0.2.0
 ```
 
 Alinhado com LogCenter V2 e dashboard unificado.
