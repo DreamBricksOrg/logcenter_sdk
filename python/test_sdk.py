@@ -498,10 +498,12 @@ def test_process_pending_sync(tmp_dir: Path) -> None:
         sender.send_sync("INFO", "queued 2")
     check("2 messages pending after failed sends", sender.spool.pending_count() == 2)
 
-    with patch.object(sender.http, "get_alive_sync", return_value=make_err_response()):
+    with patch.object(sender.http, "get_alive_sync", return_value=make_err_response()), \
+         patch.object(sender.http, "post_log_sync") as mock_post:
         result2 = sender.process_pending_sync()
     check("not alive: nothing processed", result2["sent"] == 0)
     check("not alive: remaining still 2", result2["remaining"] == 2)
+    check("not alive: post_log_sync never called", mock_post.call_count == 0)
 
     with patch.object(sender.http, "get_alive_sync", return_value=make_ok_response()), \
          patch.object(sender.http, "post_log_sync", return_value=make_ok_response()):
