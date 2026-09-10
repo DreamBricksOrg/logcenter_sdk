@@ -139,6 +139,7 @@ O SDK sempre grava em arquivo (`jsonl`), dentro de `config.spool_dir` (default `
 ### Reenvio em background
 
 ```python
+# sender já criado como em "Configuração via código" (LogCenterSender(cfg))
 sender.start_background_flush_thread()
 ```
 
@@ -158,6 +159,7 @@ cfg = LogCenterConfig(
     project_id="LOGCENTER_PROJECT_ID",
     auto_flush=True,
 )
+sender = LogCenterSender(cfg)  # a thread de background já inicia aqui, dentro do __init__
 ```
 
 ### Reenvio manual (sem thread de background)
