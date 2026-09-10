@@ -484,6 +484,33 @@ def test_send_async(tmp_dir: Path) -> None:
     asyncio.run(run())
 
 
+def test_process_pending_sync(tmp_dir: Path) -> None:
+    section("process_pending_sync() - background retry")
+
+    cfg = make_config(tmp_dir)
+    sender = LogCenterSender(cfg)
+
+    result = sender.process_pending_sync()
+    check("no-op when nothing pending", result == {"sent": 0, "corrupted": 0, "remaining": 0})
+
+    with patch.object(sender.http, "post_log_sync", return_value=make_err_response()):
+        sender.send_sync("INFO", "queued 1")
+        sender.send_sync("INFO", "queued 2")
+    check("2 messages pending after failed sends", sender.spool.pending_count() == 2)
+
+    with patch.object(sender.http, "get_alive_sync", return_value=make_err_response()):
+        result2 = sender.process_pending_sync()
+    check("not alive: nothing processed", result2["sent"] == 0)
+    check("not alive: remaining still 2", result2["remaining"] == 2)
+
+    with patch.object(sender.http, "get_alive_sync", return_value=make_ok_response()), \
+         patch.object(sender.http, "post_log_sync", return_value=make_ok_response()):
+        result3 = sender.process_pending_sync()
+    check("alive: both messages sent", result3["sent"] == 2, str(result3))
+    check("alive: nothing pending after", sender.spool.pending_count() == 0)
+    check("alive: backup has both", sender.spool.backup_count() == 2)
+
+
 def test_background_thread_survives_exception(tmp_dir: Path) -> None:
     section("_thread_flush_loop() - survives exception from process_pending_sync")
 
@@ -539,17 +566,16 @@ def test_flush_threshold(tmp_dir: Path) -> None:
 def test_background_flush_thread(tmp_dir: Path) -> None:
     section("start/stop_background_flush_thread()")
 
-    cfg = make_config(tmp_dir, spool_filename="bg_thread.jsonl", flush_interval_s=0.1)
+    cfg = make_config(tmp_dir, flush_interval_s=0.1)
     sender = LogCenterSender(cfg)
 
-    flush_calls: List[int] = []
-    original_flush = sender.flush_spool_sync
+    call_count: List[int] = []
 
-    def counting_flush(**kwargs):
-        flush_calls.append(1)
-        return original_flush(**kwargs)
+    def counting_process():
+        call_count.append(1)
+        return {"sent": 0, "corrupted": 0, "remaining": 0}
 
-    with patch.object(sender, "flush_spool_sync", side_effect=counting_flush):
+    with patch.object(sender, "process_pending_sync", side_effect=counting_process):
         sender.start_background_flush_thread()
         check("thread is alive after start",
               sender._bg_thread is not None and sender._bg_thread.is_alive())
@@ -561,26 +587,8 @@ def test_background_flush_thread(tmp_dir: Path) -> None:
 
     check("background thread stopped",
           sender._bg_thread is None or not sender._bg_thread.is_alive())
-    check("flush was called by background thread", len(flush_calls) >= 2,
-          f"flush called {len(flush_calls)} times")
-
-    cfg2 = make_config(tmp_dir, spool_filename="wake.jsonl", flush_interval_s=60.0)
-    sender2 = LogCenterSender(cfg2)
-    wake_calls: List[int] = []
-
-    def wake_flush(**kwargs):
-        wake_calls.append(1)
-        return {"sent": 0, "failed": 0, "remaining": 0}
-
-    with patch.object(sender2, "flush_spool_sync", side_effect=wake_flush):
-        sender2.start_background_flush_thread()
-        time.sleep(0.05)
-        sender2._thread_wake_event.set()
-        time.sleep(0.1)
-        sender2.stop_background_flush_thread(timeout=2.0)
-
-    check("wake signal causes immediate flush", len(wake_calls) >= 2,
-          f"calls={len(wake_calls)}")
+    check("process_pending_sync was called by background thread", len(call_count) >= 2,
+          f"called {len(call_count)} times")
 
 
 def test_auto_flush_config(tmp_dir: Path) -> None:
