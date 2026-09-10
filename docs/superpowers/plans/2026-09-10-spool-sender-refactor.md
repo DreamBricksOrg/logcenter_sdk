@@ -942,3 +942,36 @@ cd "C:/Users/db/Documents/db/prj/dreambricks/logcenter_sdk" && grep -rn "pop_bat
 Expected: `none found`.
 
 - [ ] **Step 3: If both checks pass, no further commit is needed** — Task 5's commit already reflects the final state.
+
+---
+
+### Task 7 (added during execution): Update `python/README.md` to match the new behavior
+
+**Why:** Discovered during Task 6's grep — `python/README.md` documents `flush_spool()`, `start_background_flush()`/`stop_background_flush()` (async, no-arg), and a `spool_on_fail=True` per-call opt-in, all removed in Tasks 1-3. It also claims spooling is opt-in and failures are silent by default, which is now backwards: `send()`/`send_sync()` always spool to `data_logs.jsonl` on any failure, unconditionally. This was flagged by the Task 3 and Task 5 code-quality reviewers as a real gap, explicitly deferred to "the end of the refactor" — this is that point.
+
+**Files:**
+- Modify: `python/README.md`
+
+- [ ] **Step 1: Update the top warning banner** (currently line 5) to reflect that spooling is now automatic/unconditional on failure, not opt-in.
+- [ ] **Step 2: Remove the "Spool opcional em arquivo (desativável por chamada)" bullet** from the features list (currently line 17) — there is no per-call opt-out anymore.
+- [ ] **Step 3: Rewrite the "🔁 Spool (fila offline)" section** (currently lines 128-164) to describe the real current behavior: `send()`/`send_sync()` try HTTP first; on ANY failure the payload is appended to `data_logs.jsonl` inside `spool_dir` automatically (no `spool_on_fail` parameter exists). On success, the payload is appended to `data_logs_backup.jsonl`. A background thread (`start_background_flush_thread()` / `stop_background_flush_thread()`, or automatically if `LogCenterConfig(auto_flush=True)`) periodically checks `{base_url}/alive` and, if it responds 200, retries pending items one at a time via `process_pending_sync()`, stopping at the first failure; malformed lines go to `data_logs_corrupted.jsonl`. Remove all references to `flush_spool()`, `start_background_flush()`/`stop_background_flush()` (the async no-arg pair), and `spool_on_fail`.
+- [ ] **Step 4: Update the middleware section's "NÃO exige spool" bullet** (currently line 188) since spooling on failure is now unconditional, not something that can be disabled — rephrase to state that failed audit logs are automatically spooled like any other `send()` call.
+- [ ] **Step 5: Verify no stale references remain**
+
+```bash
+cd "C:/Users/db/Documents/db/prj/dreambricks/logcenter_sdk" && grep -n "flush_spool\|start_background_flush(\|stop_background_flush(\|spool_on_fail" python/README.md || echo "none found"
+```
+
+Expected: `none found` (the async no-arg `start_background_flush()`/`stop_background_flush()` must be gone; the new `start_background_flush_thread()`/`stop_background_flush_thread()` names are fine to keep/add).
+
+- [ ] **Step 6: Commit**
+
+```bash
+cd "C:/Users/db/Documents/db/prj/dreambricks/logcenter_sdk" && git add python/README.md && git commit -m "$(cat <<'EOF'
+docs: update README to match the 3-file spool and always-spool-on-failure behavior
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01Q8P9Jx4YfG4mtiMdoCmmWF
+EOF
+)"
+```
