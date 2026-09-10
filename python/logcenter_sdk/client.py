@@ -30,3 +30,8 @@ class LogCenterHttpClient:
         url = f"{self.base_url}/logs/"
         with httpx.Client(timeout=self.timeout, follow_redirects=self.follow_redirects) as client:
             return client.post(url, headers=self.headers(), json=payload)
+
+    def get_alive_sync(self) -> httpx.Response:
+        url = f"{self.base_url}/alive"
+        with httpx.Client(timeout=self.timeout, follow_redirects=self.follow_redirects) as client:
+            return client.get(url, headers=self.headers())

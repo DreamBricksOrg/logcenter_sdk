@@ -95,7 +95,6 @@ def make_config(tmp_dir: Path, **kwargs) -> LogCenterConfig:
         project_id="test-project",
         api_key="test-key",
         spool_dir=tmp_dir,
-        spool_filename="test_spool.jsonl",
         flush_interval_s=60.0,
     )
     defaults.update(kwargs)
@@ -431,30 +430,31 @@ def test_flush_spool_async(tmp_dir: Path) -> None:
 def test_send_sync(tmp_dir: Path) -> None:
     section("send_sync() - sync immediate send")
 
-    cfg = make_config(tmp_dir, spool_filename="send_sync.jsonl")
+    cfg = make_config(tmp_dir)
     sender = LogCenterSender(cfg)
 
-    async def async_ok(payload):
-        return make_ok_response()
-
-    with patch.object(sender.http, "post_log", side_effect=async_ok):
+    with patch.object(sender.http, "post_log_sync", return_value=make_ok_response()):
         result = sender.send_sync("INFO", "sync message")
     check("send_sync returns True on success", result is True)
+    check("send_sync success goes to backup", sender.spool.backup_count() == 1)
+    check("send_sync success does not spool to main", sender.spool.pending_count() == 0)
 
-    async def async_fail(payload):
-        return make_err_response()
-
-    with patch.object(sender.http, "post_log", side_effect=async_fail):
+    with patch.object(sender.http, "post_log_sync", return_value=make_err_response()):
         result2 = sender.send_sync("ERROR", "sync fail")
     check("send_sync returns False on failure", result2 is False)
-    check("send_sync spools on failure", sender.spool.count() == 1)
+    check("send_sync failure spools to main", sender.spool.pending_count() == 1)
+
+    with patch.object(sender.http, "post_log_sync", side_effect=Exception("boom")):
+        result3 = sender.send_sync("WARN", "sync exception")
+    check("send_sync handles exception gracefully", result3 is False)
+    check("send_sync exception spools to main", sender.spool.pending_count() == 2)
 
 
 def test_send_async(tmp_dir: Path) -> None:
     section("send() - async immediate send")
 
     async def run():
-        cfg = make_config(tmp_dir, spool_filename="send_async.jsonl")
+        cfg = make_config(tmp_dir)
         sender = LogCenterSender(cfg)
 
         async def async_ok(payload):
@@ -463,6 +463,7 @@ def test_send_async(tmp_dir: Path) -> None:
         with patch.object(sender.http, "post_log", side_effect=async_ok):
             ok = await sender.send("INFO", "async message", request_id="req-123")
         check("send() returns True on success", ok is True)
+        check("send() success goes to backup", sender.spool.backup_count() == 1)
 
         async def async_fail(payload):
             return make_err_response()
@@ -470,7 +471,7 @@ def test_send_async(tmp_dir: Path) -> None:
         with patch.object(sender.http, "post_log", side_effect=async_fail):
             ok2 = await sender.send("CRITICAL", "async failure")
         check("send() returns False on failure", ok2 is False)
-        check("send() spools on failure", sender.spool.count() == 1)
+        check("send() failure spools to main", sender.spool.pending_count() == 1)
 
         async def async_exc(payload):
             raise ConnectionError("refused")
@@ -478,6 +479,7 @@ def test_send_async(tmp_dir: Path) -> None:
         with patch.object(sender.http, "post_log", side_effect=async_exc):
             ok3 = await sender.send("WARN", "connection error")
         check("send() handles exception gracefully", ok3 is False)
+        check("send() exception spools to main", sender.spool.pending_count() == 2)
 
     asyncio.run(run())
 
