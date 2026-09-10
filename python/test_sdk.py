@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import os
 import shutil
 import sys
@@ -198,10 +199,38 @@ def test_spool(tmp_dir: Path) -> None:
     check("corrupted line: pending_count is 0", spool.pending_count() == 0)
     check("corrupted line: corrupted_count is 1", spool.corrupted_count() == 1)
 
+    # send_fn raising an exception must behave exactly like send_fn returning
+    # False: current item stops the loop, stays pending, later items untried.
+    spool.append_main({"level": "INFO", "message": "will send"})
+    spool.append_main({"level": "INFO", "message": "will raise"})
+    spool.append_main({"level": "INFO", "message": "never attempted 2"})
+
+    raise_call_order: List[str] = []
+
+    def send_second_raises(item: Dict[str, Any]) -> bool:
+        raise_call_order.append(item["message"])
+        if item["message"] == "will raise":
+            raise RuntimeError("send_fn misbehaving")
+        return True
+
+    result4 = spool.process_pending(send_second_raises)
+    check("send_fn exception: sent=1", result4["sent"] == 1, str(result4))
+    check("send_fn exception: remaining=2", result4["remaining"] == 2)
+    check("send_fn exception: never attempted the third",
+          raise_call_order == ["will send", "will raise"])
+    check("send_fn exception: failed + untried stay pending", spool.pending_count() == 2)
+
+    # Clear the two still-pending items from the exception test above so they
+    # don't interfere with the concurrency invariant counted below.
+    spool.main_path.write_text("", encoding="utf-8")
+
     errors: List[Exception] = []
 
+    NUM_WRITER_THREADS = 4
+    ITEMS_PER_WRITER = 20
+
     def writer():
-        for i in range(20):
+        for i in range(ITEMS_PER_WRITER):
             try:
                 spool.append_main({"n": i})
             except Exception as e:
@@ -215,7 +244,13 @@ def test_spool(tmp_dir: Path) -> None:
             except Exception as e:
                 errors.append(e)
 
-    threads = [threading.Thread(target=writer) for _ in range(4)]
+    # backup_before captures whatever is already in the backup file at this
+    # point (dynamically, so it stays correct regardless of what earlier
+    # sub-tests in this function put there) - a broken lock would corrupt
+    # this count via lost or duplicated lines even without raising errors.
+    backup_before = spool.backup_count()
+
+    threads = [threading.Thread(target=writer) for _ in range(NUM_WRITER_THREADS)]
     threads += [threading.Thread(target=processor) for _ in range(2)]
     for t in threads:
         t.start()
@@ -223,6 +258,78 @@ def test_spool(tmp_dir: Path) -> None:
         t.join()
     check("no errors under concurrent access", len(errors) == 0,
           f"{len(errors)} errors" if errors else "")
+
+    # The processor threads may not have drained everything before joining
+    # (process_pending is called a fixed number of times, not until empty).
+    # Drain whatever is left with a final full-success pass, then verify the
+    # invariant: every item the writers appended ended up in backup exactly
+    # once - no lost or duplicated lines from a broken lock.
+    final_drain = spool.process_pending(send_all_ok)
+    expected_total_sent = NUM_WRITER_THREADS * ITEMS_PER_WRITER
+    check("concurrency invariant: pending_count is 0 after final drain",
+          spool.pending_count() == 0)
+    check("concurrency invariant: backup_count matches items appended by writers",
+          spool.backup_count() - backup_before == expected_total_sent,
+          f"backup_count={spool.backup_count()} backup_before={backup_before} "
+          f"expected_total_sent={expected_total_sent} final_drain={final_drain}")
+
+    # -- Boundary conditions -------------------------------------------
+
+    def send_all_fail(item: Dict[str, Any]) -> bool:
+        return False
+
+    # 1. Immediate first-item failure: nothing should be sent, nothing about
+    #    main_path's content should change.
+    spool.append_main({"n": "first"})
+    spool.append_main({"n": "second"})
+    spool.append_main({"n": "third"})
+    original_main_content = spool.main_path.read_text(encoding="utf-8")
+
+    result_first_fail = spool.process_pending(send_all_fail)
+    check("boundary: immediate failure sent=0", result_first_fail["sent"] == 0,
+          str(result_first_fail))
+    check("boundary: immediate failure remaining=3", result_first_fail["remaining"] == 3)
+    check("boundary: immediate failure leaves main_path unchanged",
+          spool.main_path.read_text(encoding="utf-8") == original_main_content)
+
+    spool.main_path.write_text("", encoding="utf-8")
+
+    # 2. Multiple corrupted lines in one pass.
+    corrupted_before = spool.corrupted_count()
+    spool.main_path.write_text(
+        "not valid json 1\n"
+        "not valid json 2\n"
+        + json.dumps({"n": "valid"}) + "\n",
+        encoding="utf-8",
+    )
+    result_multi_corrupt = spool.process_pending(send_all_ok)
+    check("boundary: multiple corrupted lines corrupted=2",
+          result_multi_corrupt["corrupted"] == 2, str(result_multi_corrupt))
+    check("boundary: multiple corrupted lines sent=1", result_multi_corrupt["sent"] == 1)
+    check("boundary: corrupted_count reflects both lines",
+          spool.corrupted_count() - corrupted_before == 2)
+    check("boundary: multiple corrupted lines pending_count=0", spool.pending_count() == 0)
+
+    # 3. Blank line interleaved between two valid JSON lines.
+    spool.main_path.write_text(
+        json.dumps({"n": "a"}) + "\n"
+        "\n"
+        + json.dumps({"n": "b"}) + "\n",
+        encoding="utf-8",
+    )
+    corrupted_before_blank = spool.corrupted_count()
+    result_blank = spool.process_pending(send_all_ok)
+    check("boundary: blank line does not error, sent=2", result_blank["sent"] == 2,
+          str(result_blank))
+    check("boundary: blank line not counted as corrupted",
+          spool.corrupted_count() == corrupted_before_blank)
+
+    # 4. process_pending on a genuinely empty main file.
+    empty_spool = FileSpool(tmp_dir / "empty")
+    result_empty = empty_spool.process_pending(send_all_ok)
+    check("boundary: empty file returns sent=0/corrupted=0/remaining=0",
+          result_empty == {"sent": 0, "corrupted": 0, "remaining": 0},
+          str(result_empty))
 
 
 def test_send_spool(tmp_dir: Path) -> None:

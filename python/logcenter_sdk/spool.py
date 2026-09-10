@@ -74,7 +74,9 @@ class FileSpool:
         - send_fn(item) retorna True -> data_logs_backup.jsonl, segue.
         - send_fn(item) retorna False -> para o loop; essa linha e as seguintes
           permanecem em data_logs.jsonl, na mesma ordem, para a proxima tentativa.
-        send_fn nao deve lancar excecao - deve capturar e retornar False.
+        send_fn nao deve lancar excecao - deve capturar e retornar False. Isso e
+        so uma linha de defesa: se send_fn lancar mesmo assim, o efeito e o
+        mesmo de retornar False (a linha atual e as seguintes ficam pendentes).
         """
         with self._lock:
             try:
@@ -97,7 +99,12 @@ class FileSpool:
                     corrupted += 1
                     continue
 
-                if send_fn(item):
+                try:
+                    ok = send_fn(item)
+                except Exception:
+                    ok = False
+
+                if ok:
                     self._append_line(self.backup_path, item)
                     sent += 1
                 else:
