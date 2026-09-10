@@ -151,59 +151,72 @@ def test_config() -> None:
 def test_spool(tmp_dir: Path) -> None:
     section("FileSpool")
 
-    spool = FileSpool(tmp_dir, "spool_test.jsonl", max_bytes=1024 * 1024)
+    spool = FileSpool(tmp_dir)
 
-    check("initial count is 0", spool.count() == 0)
+    check("no pending initially", spool.has_pending() is False)
+    check("pending_count is 0 initially", spool.pending_count() == 0)
 
-    spool.append({"level": "INFO", "message": "msg1"})
-    spool.append({"level": "WARN", "message": "msg2"})
-    spool.append({"level": "ERROR", "message": "msg3"})
-    check("count after 3 appends", spool.count() == 3)
+    spool.append_main({"level": "INFO", "message": "msg1"})
+    spool.append_main({"level": "WARN", "message": "msg2"})
+    spool.append_main({"level": "ERROR", "message": "msg3"})
+    check("has_pending after appends", spool.has_pending() is True)
+    check("pending_count after 3 appends", spool.pending_count() == 3)
 
-    stats = spool.stats()
-    check("stats queued matches count", stats.queued == 3)
-    check("stats bytes > 0", stats.bytes > 0)
+    spool.append_backup({"level": "INFO", "message": "delivered"})
+    check("backup_count after append_backup", spool.backup_count() == 1)
 
-    items, remaining = spool.pop_batch(2)
-    check("pop_batch returns 2 items", len(items) == 2)
-    check("pop_batch remaining is 1", remaining == 1)
-    check("count after pop matches remaining", spool.count() == 1)
-    check("pop_batch FIFO order",
-          items[0]["message"] == "msg1" and items[1]["message"] == "msg2")
+    def send_all_ok(item: Dict[str, Any]) -> bool:
+        return True
 
-    items2, remaining2 = spool.pop_batch(10)
-    check("pop remaining items", len(items2) == 1 and remaining2 == 0)
-    check("count is 0 after drain", spool.count() == 0)
+    result = spool.process_pending(send_all_ok)
+    check("process_pending sent=3", result["sent"] == 3, str(result))
+    check("process_pending corrupted=0", result["corrupted"] == 0)
+    check("process_pending remaining=0", result["remaining"] == 0)
+    check("pending_count is 0 after full success", spool.pending_count() == 0)
+    check("backup_count has original + 3 sent", spool.backup_count() == 4)
 
-    empty, rem = spool.pop_batch(5)
-    check("pop from empty returns empty list", empty == [] and rem == 0)
+    spool.append_main({"level": "INFO", "message": "will send"})
+    spool.append_main({"level": "INFO", "message": "will fail"})
+    spool.append_main({"level": "INFO", "message": "never attempted"})
 
-    tiny_spool = FileSpool(tmp_dir, "tiny_spool.jsonl", max_bytes=200)
-    for i in range(20):
-        tiny_spool.append({"msg": f"message-{i:03d}"})
-    check("trim keeps count within budget", tiny_spool.count() < 20)
-    check("trim count > 0", tiny_spool.count() > 0)
+    call_order: List[str] = []
 
-    ts_spool = FileSpool(tmp_dir, "thread_spool.jsonl", max_bytes=1024 * 1024)
+    def send_second_fails(item: Dict[str, Any]) -> bool:
+        call_order.append(item["message"])
+        return item["message"] != "will fail"
+
+    result2 = spool.process_pending(send_second_fails)
+    check("stop-on-failure: sent=1", result2["sent"] == 1, str(result2))
+    check("stop-on-failure: remaining=2", result2["remaining"] == 2)
+    check("stop-on-failure: never attempted the third", call_order == ["will send", "will fail"])
+    check("stop-on-failure: failed + untried stay pending", spool.pending_count() == 2)
+
+    spool.main_path.write_text("not valid json\n", encoding="utf-8")
+    result3 = spool.process_pending(send_all_ok)
+    check("corrupted line: corrupted=1", result3["corrupted"] == 1, str(result3))
+    check("corrupted line: sent=0", result3["sent"] == 0)
+    check("corrupted line: pending_count is 0", spool.pending_count() == 0)
+    check("corrupted line: corrupted_count is 1", spool.corrupted_count() == 1)
+
     errors: List[Exception] = []
 
     def writer():
-        for i in range(50):
+        for i in range(20):
             try:
-                ts_spool.append({"n": i})
+                spool.append_main({"n": i})
             except Exception as e:
                 errors.append(e)
 
-    def reader():
+    def processor():
         for _ in range(10):
             try:
-                ts_spool.pop_batch(5)
+                spool.process_pending(send_all_ok)
                 time.sleep(0.001)
             except Exception as e:
                 errors.append(e)
 
     threads = [threading.Thread(target=writer) for _ in range(4)]
-    threads += [threading.Thread(target=reader) for _ in range(2)]
+    threads += [threading.Thread(target=processor) for _ in range(2)]
     for t in threads:
         t.start()
     for t in threads:
