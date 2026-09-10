@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Optional
 import os
 
 
@@ -15,13 +15,10 @@ class LogCenterConfig:
     timeout_s: float = 10.0
     follow_redirects: bool = True
 
-    # spool (offline queue)
+    # spool (offline queue) - always data_logs.jsonl / data_logs_backup.jsonl /
+    # data_logs_corrupted.jsonl inside spool_dir, see spool.py
     spool_dir: Path = field(default_factory=lambda: Path(os.getenv("LOGCENTER_SPOOL_DIR", ".logcenter")))
-    spool_filename: str = "spool.jsonl"
-    spool_max_bytes: int = 25 * 1024 * 1024  # 25MB
-    flush_batch_size: int = 200
     flush_interval_s: float = 10.0
-    flush_threshold_count: int = 0  # 0 = disabled; auto-flush after N messages in spool
     auto_flush: bool = False  # auto-start background flush thread on init
 
     enabled: bool = True
@@ -34,10 +31,7 @@ class LogCenterConfig:
 
         timeout_s = float(os.getenv(f"{prefix}TIMEOUT_S", "10"))
         spool_dir = Path(os.getenv(f"{prefix}SPOOL_DIR", ".logcenter"))
-        spool_max_bytes = int(os.getenv(f"{prefix}SPOOL_MAX_BYTES", str(25 * 1024 * 1024)))
-        flush_batch_size = int(os.getenv(f"{prefix}FLUSH_BATCH_SIZE", "200"))
         flush_interval_s = float(os.getenv(f"{prefix}FLUSH_INTERVAL_S", "10"))
-        flush_threshold_count = int(os.getenv(f"{prefix}FLUSH_THRESHOLD_COUNT", "0"))
         auto_flush = os.getenv(f"{prefix}AUTO_FLUSH", "false").lower() in ("1", "true", "yes", "y")
         enabled = os.getenv(f"{prefix}ENABLED", "true").lower() in ("1", "true", "yes", "y")
 
@@ -50,10 +44,7 @@ class LogCenterConfig:
             api_key=api_key,
             timeout_s=timeout_s,
             spool_dir=spool_dir,
-            spool_max_bytes=spool_max_bytes,
-            flush_batch_size=flush_batch_size,
             flush_interval_s=flush_interval_s,
-            flush_threshold_count=flush_threshold_count,
             auto_flush=auto_flush,
             enabled=enabled,
         )

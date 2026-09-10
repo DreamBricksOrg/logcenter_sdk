@@ -121,22 +121,24 @@ def test_config() -> None:
     section("LogCenterConfig")
 
     cfg = LogCenterConfig(base_url="https://api.logcenter.io", project_id="proj-1")
-    check("default values", cfg.timeout_s == 10.0 and cfg.flush_batch_size == 200)
+    check("default timeout_s", cfg.timeout_s == 10.0)
+    check("default flush_interval_s", cfg.flush_interval_s == 10.0)
     check("auto_flush default is False", cfg.auto_flush is False)
-    check("flush_threshold_count default is 0", cfg.flush_threshold_count == 0)
+    check("no spool_max_bytes field", not hasattr(cfg, "spool_max_bytes"))
+    check("no flush_threshold_count field", not hasattr(cfg, "flush_threshold_count"))
+    check("no flush_batch_size field", not hasattr(cfg, "flush_batch_size"))
+    check("no spool_filename field", not hasattr(cfg, "spool_filename"))
 
     env = {
         "LOGCENTER_BASE_URL": "https://env.logcenter.io",
         "LOGCENTER_PROJECT_ID": "proj-env",
         "LOGCENTER_API_KEY": "env-key",
-        "LOGCENTER_FLUSH_THRESHOLD_COUNT": "25",
         "LOGCENTER_AUTO_FLUSH": "true",
         "LOGCENTER_ENABLED": "1",
     }
     with patch.dict(os.environ, env, clear=False):
         cfg_env = LogCenterConfig.from_env()
     check("from_env base_url", cfg_env.base_url == "https://env.logcenter.io")
-    check("from_env flush_threshold_count", cfg_env.flush_threshold_count == 25)
     check("from_env auto_flush", cfg_env.auto_flush is True)
 
     try:
