@@ -3,21 +3,19 @@ LogCenter SDK - Test Script
 
 Covers (mocked, always run):
   - LogCenterConfig (code and env-var based)
-  - FileSpool (append, count, pop_batch, trim, thread safety)
-  - LogCenterSender.send_spool()       - store without sending
-  - LogCenterSender.flush_spool_sync() - sync flush
-  - LogCenterSender.flush_spool()      - async flush
-  - LogCenterSender.send_sync()        - sync immediate send
-  - LogCenterSender.send()             - async immediate send
-  - flush_threshold_count auto-flush trigger
+  - FileSpool (append_main, append_backup, has_pending, pending_count,
+    process_pending: success, stop-on-failure, corrupted line, thread safety,
+    edge cases)
+  - LogCenterSender.send_sync()            - sync immediate send (spools on failure)
+  - LogCenterSender.send()                 - async immediate send (spools on failure)
+  - LogCenterSender.process_pending_sync() - alive check + one-by-one retry
   - start/stop_background_flush_thread()
+  - background thread survives an exception in process_pending_sync
   - auto_flush config flag
 
 Live tests (run only when LogCenter credentials are supplied):
   - send_sync() against real API
   - send() async against real API
-  - send_spool() + flush_spool_sync() against real API
-  - send_spool() + background flush thread against real API
 
 Usage:
   # Mocked tests only
@@ -331,102 +329,6 @@ def test_spool(tmp_dir: Path) -> None:
           str(result_empty))
 
 
-def test_send_spool(tmp_dir: Path) -> None:
-    section("send_spool() - store without network")
-
-    cfg = make_config(tmp_dir)
-    sender = LogCenterSender(cfg)
-
-    sender.send_spool("INFO", "stored message 1", tags=["tag1"])
-    sender.send_spool("ERROR", "stored message 2", data={"key": "val"})
-    count = sender.spool.count()
-    check("send_spool stores to spool", count == 2, f"count={count}")
-
-    items, _ = sender.spool.pop_batch(10)
-    check("stored payload has correct level", items[0]["level"] == "INFO")
-    check("stored payload has correct status", items[0]["status"] == "OK")
-    check("stored payload has tags", items[0].get("tags") == ["tag1"])
-    check("ERROR level infers ERROR status", items[1]["status"] == "ERROR")
-    check("stored payload has data", items[1].get("data") == {"key": "val"})
-
-    cfg_disabled = make_config(tmp_dir, enabled=False, spool_filename="disabled.jsonl")
-    sender_off = LogCenterSender(cfg_disabled)
-    result = sender_off.send_spool("INFO", "should not store")
-    check("send_spool returns False when disabled", result is False)
-    check("disabled sender does not write to spool", sender_off.spool.count() == 0)
-
-
-def test_flush_spool_sync(tmp_dir: Path) -> None:
-    section("flush_spool_sync() - synchronous flush")
-
-    cfg = make_config(tmp_dir, spool_filename="flush_sync.jsonl")
-    sender = LogCenterSender(cfg)
-
-    sender.send_spool("INFO", "msg A")
-    sender.send_spool("INFO", "msg B")
-    sender.send_spool("INFO", "msg C")
-
-    with patch.object(sender.http, "post_log_sync", return_value=make_ok_response()):
-        result = sender.flush_spool_sync()
-
-    check("flush_spool_sync sent=3", result["sent"] == 3, str(result))
-    check("flush_spool_sync failed=0", result["failed"] == 0)
-    check("flush_spool_sync remaining=0", result["remaining"] == 0)
-    check("spool is empty after flush", sender.spool.count() == 0)
-
-    sender.send_spool("INFO", "will send")
-    sender.send_spool("INFO", "will fail")
-    sender.send_spool("INFO", "never reached")
-
-    responses = [make_ok_response(), make_err_response()]
-    call_count = 0
-
-    def side_effect(payload):
-        nonlocal call_count
-        resp = responses[min(call_count, len(responses) - 1)]
-        call_count += 1
-        return resp
-
-    with patch.object(sender.http, "post_log_sync", side_effect=side_effect):
-        result2 = sender.flush_spool_sync()
-
-    check("partial failure: sent=1", result2["sent"] == 1, str(result2))
-    check("partial failure: failed=1", result2["failed"] == 1)
-    check("partial failure: failed item re-queued", result2["remaining"] >= 1)
-
-    cfg2 = make_config(tmp_dir, spool_filename="exc_test.jsonl")
-    sender2 = LogCenterSender(cfg2)
-    sender2.send_spool("WARN", "exception test")
-
-    with patch.object(sender2.http, "post_log_sync", side_effect=Exception("timeout")):
-        result3 = sender2.flush_spool_sync()
-
-    check("exception during flush is handled", result3["failed"] == 1)
-    check("exception: message re-queued", result3["remaining"] == 1)
-
-
-def test_flush_spool_async(tmp_dir: Path) -> None:
-    section("flush_spool() - async flush")
-
-    async def run():
-        cfg = make_config(tmp_dir, spool_filename="flush_async.jsonl")
-        sender = LogCenterSender(cfg)
-
-        sender.send_spool("DEBUG", "async msg 1")
-        sender.send_spool("DEBUG", "async msg 2")
-
-        async def async_post(payload):
-            return make_ok_response()
-
-        with patch.object(sender.http, "post_log", side_effect=async_post):
-            result = await sender.flush_spool()
-
-        check("async flush sent=2", result["sent"] == 2, str(result))
-        check("async flush remaining=0", result["remaining"] == 0)
-
-    asyncio.run(run())
-
-
 def test_send_sync(tmp_dir: Path) -> None:
     section("send_sync() - sync immediate send")
 
@@ -540,31 +442,6 @@ def test_background_thread_survives_exception(tmp_dir: Path) -> None:
           sender._bg_thread is None or not sender._bg_thread.is_alive())
 
 
-def test_flush_threshold(tmp_dir: Path) -> None:
-    section("flush_threshold_count - auto-trigger on count")
-
-    cfg = make_config(tmp_dir, spool_filename="threshold.jsonl", flush_threshold_count=3)
-    sender = LogCenterSender(cfg)
-
-    flush_calls: List[int] = []
-
-    def fake_flush_sync(**kwargs):
-        sender.spool.pop_batch(100)
-        flush_calls.append(1)
-        return {"sent": 1, "failed": 0, "remaining": 0}
-
-    with patch.object(sender, "flush_spool_sync", side_effect=fake_flush_sync):
-        sender.send_spool("INFO", "msg 1")
-        sender.send_spool("INFO", "msg 2")
-        check("no flush before threshold", len(flush_calls) == 0)
-
-        sender.send_spool("INFO", "msg 3")
-        time.sleep(0.1)
-
-    check("flush triggered at threshold", len(flush_calls) >= 1,
-          f"flush_calls={len(flush_calls)}")
-
-
 def test_background_flush_thread(tmp_dir: Path) -> None:
     section("start/stop_background_flush_thread()")
 
@@ -596,8 +473,7 @@ def test_background_flush_thread(tmp_dir: Path) -> None:
 def test_auto_flush_config(tmp_dir: Path) -> None:
     section("auto_flush=True config flag")
 
-    cfg = make_config(tmp_dir, spool_filename="auto.jsonl",
-                      auto_flush=True, flush_interval_s=60.0)
+    cfg = make_config(tmp_dir, auto_flush=True, flush_interval_s=60.0)
     sender = LogCenterSender(cfg)
 
     check("background thread auto-started",
@@ -617,7 +493,6 @@ def live_config(tmp_dir: Path, live: Dict[str, str], **kwargs) -> LogCenterConfi
         project_id=live["project_id"],
         api_key=live.get("api_key"),
         spool_dir=tmp_dir,
-        spool_filename="live_spool.jsonl",
         flush_interval_s=5.0,
     )
     defaults.update(kwargs)
@@ -658,82 +533,6 @@ def test_live_send_async(tmp_dir: Path, live: Dict[str, str]) -> None:
         check("send() CRITICAL succeeds", ok2 is True)
 
     asyncio.run(run())
-
-
-def test_live_spool_and_flush(tmp_dir: Path, live: Dict[str, str]) -> None:
-    section("[LIVE] send_spool() + flush_spool_sync()")
-
-    cfg = live_config(tmp_dir, live, spool_filename="live_flush.jsonl")
-    sender = LogCenterSender(cfg)
-
-    sender.send_spool("INFO", "test_live_spool_and_flush: queued msg 1",
-                      data={"source": "test_sdk.py", "seq": 1})
-    sender.send_spool("WARN", "test_live_spool_and_flush: queued msg 2",
-                      data={"source": "test_sdk.py", "seq": 2})
-    sender.send_spool("ERROR", "test_live_spool_and_flush: queued msg 3",
-                      data={"source": "test_sdk.py", "seq": 3})
-
-    queued = sender.spool.count()
-    check("3 messages queued before flush", queued == 3, f"queued={queued}")
-
-    result = sender.flush_spool_sync()
-    check("flush_spool_sync sent all", result["sent"] == 3, str(result))
-    check("flush_spool_sync no failures", result["failed"] == 0)
-    check("spool empty after flush", result["remaining"] == 0)
-
-
-def test_live_background_flush(tmp_dir: Path, live: Dict[str, str]) -> None:
-    section("[LIVE] send_spool() + background flush thread")
-
-    cfg = live_config(tmp_dir, live,
-                      spool_filename="live_bg.jsonl",
-                      flush_interval_s=2.0)
-    sender = LogCenterSender(cfg)
-
-    sender.send_spool("INFO", "test_live_background_flush: bg msg 1",
-                      data={"source": "test_sdk.py"})
-    sender.send_spool("INFO", "test_live_background_flush: bg msg 2",
-                      data={"source": "test_sdk.py"})
-
-    check("messages queued before thread start", sender.spool.count() == 2)
-
-    sender.start_background_flush_thread()
-    check("background thread started", sender._bg_thread.is_alive())
-
-    # wait for the background thread to flush (interval is 2s)
-    deadline = time.time() + 10.0
-    while sender.spool.count() > 0 and time.time() < deadline:
-        time.sleep(0.25)
-
-    sender.stop_background_flush_thread(timeout=3.0)
-    check("spool drained by background thread", sender.spool.count() == 0,
-          f"remaining={sender.spool.count()}")
-
-
-def test_live_threshold_flush(tmp_dir: Path, live: Dict[str, str]) -> None:
-    section("[LIVE] flush_threshold_count - auto-flush to real API")
-
-    cfg = live_config(tmp_dir, live,
-                      spool_filename="live_thresh.jsonl",
-                      flush_threshold_count=3)
-    sender = LogCenterSender(cfg)
-
-    sender.send_spool("INFO", "test_live_threshold_flush: msg 1",
-                      data={"source": "test_sdk.py"})
-    sender.send_spool("INFO", "test_live_threshold_flush: msg 2",
-                      data={"source": "test_sdk.py"})
-    check("no flush before threshold", sender.spool.count() == 2)
-
-    sender.send_spool("INFO", "test_live_threshold_flush: msg 3 (triggers flush)",
-                      data={"source": "test_sdk.py"})
-
-    # wait for the one-shot thread to finish
-    deadline = time.time() + 10.0
-    while sender.spool.count() > 0 and time.time() < deadline:
-        time.sleep(0.25)
-
-    check("spool drained by threshold flush", sender.spool.count() == 0,
-          f"remaining={sender.spool.count()}")
 
 
 # ---------------------------------------------------------------------------
@@ -802,24 +601,19 @@ def main() -> None:
     tmp = Path(tempfile.mkdtemp(prefix="logcenter_test_"))
     try:
         mocked_tests = [
-            ("Config",                  lambda: test_config()),
-            ("FileSpool",               lambda: test_spool(tmp / "spool")),
-            ("send_spool",              lambda: test_send_spool(tmp / "send_spool")),
-            ("flush_spool_sync",        lambda: test_flush_spool_sync(tmp / "flush_sync")),
-            ("flush_spool (async)",     lambda: test_flush_spool_async(tmp / "flush_async")),
-            ("send_sync",               lambda: test_send_sync(tmp / "send_sync")),
-            ("send (async)",            lambda: test_send_async(tmp / "send_async")),
-            ("flush_threshold_count",   lambda: test_flush_threshold(tmp / "threshold")),
-            ("background_flush_thread", lambda: test_background_flush_thread(tmp / "bg")),
-            ("auto_flush config",       lambda: test_auto_flush_config(tmp / "auto")),
+            ("Config",                        lambda: test_config()),
+            ("FileSpool",                     lambda: test_spool(tmp / "spool")),
+            ("send_sync",                     lambda: test_send_sync(tmp / "send_sync")),
+            ("send (async)",                  lambda: test_send_async(tmp / "send_async")),
+            ("process_pending_sync",          lambda: test_process_pending_sync(tmp / "process_pending")),
+            ("background_flush_thread",       lambda: test_background_flush_thread(tmp / "bg")),
+            ("background thread survives exception", lambda: test_background_thread_survives_exception(tmp / "bg_survive")),
+            ("auto_flush config",             lambda: test_auto_flush_config(tmp / "auto")),
         ]
 
         live_tests = [
-            ("live: send_sync",          lambda: test_live_send_sync(tmp / "live1", live)),
-            ("live: send async",         lambda: test_live_send_async(tmp / "live2", live)),
-            ("live: spool + flush_sync", lambda: test_live_spool_and_flush(tmp / "live3", live)),
-            ("live: background flush",   lambda: test_live_background_flush(tmp / "live4", live)),
-            ("live: threshold flush",    lambda: test_live_threshold_flush(tmp / "live5", live)),
+            ("live: send_sync",  lambda: test_live_send_sync(tmp / "live1", live)),
+            ("live: send async", lambda: test_live_send_async(tmp / "live2", live)),
         ]
 
         tests_to_run = []
