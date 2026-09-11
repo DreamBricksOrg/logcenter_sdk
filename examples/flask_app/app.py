@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import atexit
+import logging
 import os
 from pathlib import Path
 
@@ -11,12 +12,20 @@ from logcenter_sdk import LogCenterConfig, LogCenterSender
 
 load_dotenv()
 
+# Mostra no console os logs da propria SDK (envio com sucesso, linha sendo
+# processada no retry, erro e qual erro). Sem isso a SDK fica silenciosa
+# (ela registra um NullHandler por padrao).
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
+
 cfg = LogCenterConfig(
     base_url=os.getenv("LOGCENTER_BASE_URL", "http://localhost:9999"),
     project_id=os.getenv("LOGCENTER_PROJECT_ID", "test-project"),
     api_key=os.getenv("LOGCENTER_API_KEY") or None,
     spool_dir=Path(os.getenv("LOGCENTER_SPOOL_DIR", "./spool_data")),
-    flush_interval_s=float(os.getenv("LOGCENTER_FLUSH_INTERVAL_S", "5")),
+    flush_interval_s=float(os.getenv("LOGCENTER_FLUSH_INTERVAL_S", "120")),
     auto_flush=os.getenv("LOGCENTER_AUTO_FLUSH", "true").lower() in ("1", "true", "yes"),
 )
 
@@ -50,6 +59,7 @@ def log():
         tags=body.get("tags"),
         data=body.get("data"),
         request_id=body.get("request_id"),
+    
     )
     return jsonify({"sent_immediately": ok, "spool": _spool_status()})
 

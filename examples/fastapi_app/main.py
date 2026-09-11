@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -11,6 +12,15 @@ from pydantic import BaseModel
 from logcenter_sdk import LogCenterAuditMiddleware, LogCenterConfig, LogCenterSender
 
 load_dotenv()
+
+# Mostra no console os logs da propria SDK (envio com sucesso, linha sendo
+# processada no retry, erro e qual erro). Sem isso a SDK fica silenciosa
+# (ela registra um NullHandler por padrao). Uvicorn nao mexe no root logger,
+# entao isso convive normal com os logs de acesso do uvicorn.
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
 
 cfg = LogCenterConfig(
     base_url=os.getenv("LOGCENTER_BASE_URL", "http://localhost:9999"),

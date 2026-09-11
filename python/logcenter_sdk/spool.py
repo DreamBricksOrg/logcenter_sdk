@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import json
+import logging
 import threading
 from pathlib import Path
 from typing import Any, Callable, Dict
+
+logger = logging.getLogger(__name__)
 
 
 MAIN_FILENAME = "data_logs.jsonl"
@@ -95,9 +98,18 @@ class FileSpool:
                 try:
                     item = json.loads(line)
                 except Exception:
+                    logger.warning(
+                        "Linha corrompida no spool, movida para %s: %s",
+                        self.corrupted_path.name, line,
+                    )
                     self._append_line(self.corrupted_path, {"raw": line})
                     corrupted += 1
                     continue
+
+                logger.info(
+                    "Processando linha pendente do spool (%d/%d): %s",
+                    i + 1, len(lines), item.get("message", item),
+                )
 
                 try:
                     ok = send_fn(item)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import threading
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -7,6 +8,8 @@ from typing import Any, Dict, List, Optional
 from .config import LogCenterConfig
 from .client import LogCenterHttpClient
 from .spool import FileSpool
+
+logger = logging.getLogger(__name__)
 
 
 def _utc_iso() -> str:
@@ -94,10 +97,20 @@ class LogCenterSender:
         try:
             resp = await self.http.post_log(payload)
             ok = 200 <= resp.status_code < 300
-        except Exception:
+            if not ok:
+                logger.error(
+                    "Falha ao enviar log ao LogCenter (status %s): %s",
+                    resp.status_code, message,
+                )
+        except Exception as exc:
             ok = False
+            logger.error(
+                "Erro ao enviar log ao LogCenter (%s): %s - %s",
+                type(exc).__name__, exc, message,
+            )
 
         if ok:
+            logger.info("Log enviado com sucesso: %s", message)
             self.spool.append_backup(payload)
             return True
 
@@ -141,10 +154,23 @@ class LogCenterSender:
             return False
 
     def _post_log_bool(self, payload: Dict[str, Any]) -> bool:
+        message = payload.get("message")
         try:
             resp = self.http.post_log_sync(payload)
-            return 200 <= resp.status_code < 300
-        except Exception:
+            ok = 200 <= resp.status_code < 300
+            if ok:
+                logger.info("Log enviado com sucesso: %s", message)
+            else:
+                logger.error(
+                    "Falha ao enviar log ao LogCenter (status %s): %s",
+                    resp.status_code, message,
+                )
+            return ok
+        except Exception as exc:
+            logger.error(
+                "Erro ao enviar log ao LogCenter (%s): %s - %s",
+                type(exc).__name__, exc, message,
+            )
             return False
 
     def process_pending_sync(self) -> Dict[str, int]:
