@@ -94,6 +94,7 @@ def make_config(tmp_dir: Path, **kwargs) -> LogCenterConfig:
         api_key="test-key",
         spool_dir=tmp_dir,
         flush_interval_s=60.0,
+        auto_flush=False,  # tests opt in explicitly when they want the bg thread
     )
     defaults.update(kwargs)
     return LogCenterConfig(**defaults)
@@ -121,7 +122,8 @@ def test_config() -> None:
     cfg = LogCenterConfig(base_url="https://api.logcenter.io", project_id="proj-1")
     check("default timeout_s", cfg.timeout_s == 10.0)
     check("default flush_interval_s", cfg.flush_interval_s == 10.0)
-    check("auto_flush default is False", cfg.auto_flush is False)
+    check("auto_flush default is True", cfg.auto_flush is True)
+    check("auto_flush=False override works", LogCenterConfig(base_url="x", project_id="y", auto_flush=False).auto_flush is False)
     check("no spool_max_bytes field", not hasattr(cfg, "spool_max_bytes"))
     check("no flush_threshold_count field", not hasattr(cfg, "flush_threshold_count"))
     check("no flush_batch_size field", not hasattr(cfg, "flush_batch_size"))
@@ -471,16 +473,20 @@ def test_background_flush_thread(tmp_dir: Path) -> None:
 
 
 def test_auto_flush_config(tmp_dir: Path) -> None:
-    section("auto_flush=True config flag")
+    section("auto_flush config flag")
 
     cfg = make_config(tmp_dir, auto_flush=True, flush_interval_s=60.0)
     sender = LogCenterSender(cfg)
 
-    check("background thread auto-started",
+    check("background thread auto-started when auto_flush=True",
           sender._bg_thread is not None and sender._bg_thread.is_alive())
     sender.stop_background_flush_thread(timeout=2.0)
     check("thread stopped cleanly",
           sender._bg_thread is None or not sender._bg_thread.is_alive())
+
+    cfg_off = make_config(tmp_dir / "off", auto_flush=False)
+    sender_off = LogCenterSender(cfg_off)
+    check("no background thread when auto_flush=False", sender_off._bg_thread is None)
 
 
 # ---------------------------------------------------------------------------
@@ -494,6 +500,7 @@ def live_config(tmp_dir: Path, live: Dict[str, str], **kwargs) -> LogCenterConfi
         api_key=live.get("api_key"),
         spool_dir=tmp_dir,
         flush_interval_s=5.0,
+        auto_flush=False,  # tests opt in explicitly when they want the bg thread
     )
     defaults.update(kwargs)
     return LogCenterConfig(**defaults)

@@ -2,7 +2,7 @@
 
 SDK oficial para envio de logs ao **LogCenter**, projetado para ser utilizado como biblioteca em aplicações Python da empresa, com foco em **padronização, observabilidade e baixo acoplamento**.
 
-> ⚠️ **Importante**: `send()` / `send_sync()` tentam o envio HTTP direto e, em **qualquer falha** (status não-2xx, erro de rede, config inválida), gravam o payload em `data_logs.jsonl` — isso é automático e incondicional, não há parâmetro para desativar. O reenvio desses itens pendentes, porém, **não é automático por si só**: só acontece através da thread de background (`sender.start_background_flush_thread()` ou `LogCenterConfig(auto_flush=True)`). Se você nunca iniciar essa thread, os itens pendentes apenas se acumulam em `data_logs.jsonl` até que você a inicie ou chame `sender.process_pending_sync()` manualmente.
+> ⚠️ **Importante**: `send()` / `send_sync()` tentam o envio HTTP direto e, em **qualquer falha** (status não-2xx, erro de rede, config inválida), gravam o payload em `data_logs.jsonl` — isso é automático e incondicional, não há parâmetro para desativar. O reenvio desses itens pendentes **é automático por padrão**: `LogCenterConfig.auto_flush` já vem `True`, então a thread de background inicia sozinha na criação do `LogCenterSender`. Para desligar esse comportamento, use `LogCenterConfig(auto_flush=False, ...)` — nesse caso os itens pendentes só se acumulam em `data_logs.jsonl` até você chamar `sender.start_background_flush_thread()` ou `sender.process_pending_sync()` manualmente.
 
 ## 🚨 Breaking changes (a partir da 0.2.0)
 
@@ -11,6 +11,11 @@ Se você está atualizando de uma versão anterior à `0.2.0`, os seguintes iten
 -   Métodos `send_spool()`, `flush_spool()` / `flush_spool_sync()` e o par assíncrono sem argumentos `start_background_flush()` / `stop_background_flush()`
 -   Parâmetro `spool_on_fail`
 -   Campos de `LogCenterConfig`: `spool_filename`, `spool_max_bytes`, `flush_batch_size`, `flush_threshold_count`
+
+Além disso, `LogCenterConfig(auto_flush=...)` agora tem **default `True`** (antes era
+`False`) — a thread de reenvio em background liga sozinha ao criar o `LogCenterSender`.
+Pra manter o comportamento antigo (retry só quando você chamar explicitamente), passe
+`auto_flush=False`.
 
 Veja a seção [🔁 Spool (fila offline)](#-spool-fila-offline) abaixo para o comportamento atual equivalente.
 
@@ -148,28 +153,32 @@ O SDK sempre grava em arquivo (`jsonl`), dentro de `config.spool_dir` (default `
 
 ### Reenvio em background
 
+Por padrão (`LogCenterConfig.auto_flush=True`), a thread de background já inicia
+sozinha na criação do `LogCenterSender` — você não precisa chamar nada:
+
 ```python
-# sender já criado como em "Configuração via código" (LogCenterSender(cfg))
-sender.start_background_flush_thread()
+sender = LogCenterSender(cfg)  # a thread de background já inicia aqui, dentro do __init__
 ```
 
 A cada `config.flush_interval_s` segundos, se houver itens pendentes (`spool.has_pending()`), a thread faz `GET {base_url}/alive`; se a resposta for HTTP 200, ela reprocessa `data_logs.jsonl` um item por vez (`process_pending_sync()`), parando no primeiro item que falhar — esse item e os seguintes permanecem pendentes para a próxima rodada.
 
-Encerramento:
-
-```python
-sender.stop_background_flush_thread()
-```
-
-Alternativa: iniciar a thread automaticamente na criação do `LogCenterSender`, via config:
+Para desligar esse comportamento automático:
 
 ```python
 cfg = LogCenterConfig(
     base_url="LOGCENTER_URL",
     project_id="LOGCENTER_PROJECT_ID",
-    auto_flush=True,
+    auto_flush=False,
 )
-sender = LogCenterSender(cfg)  # a thread de background já inicia aqui, dentro do __init__
+```
+
+Com `auto_flush=False`, ninguém reenvia sozinho — controle a thread manualmente:
+
+```python
+# sender já criado como em "Configuração via código" (LogCenterSender(cfg))
+sender.start_background_flush_thread()
+...
+sender.stop_background_flush_thread()
 ```
 
 ### Reenvio manual (sem thread de background)

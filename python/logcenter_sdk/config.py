@@ -19,7 +19,7 @@ class LogCenterConfig:
     # data_logs_corrupted.jsonl inside spool_dir, see spool.py
     spool_dir: Path = field(default_factory=lambda: Path(os.getenv("LOGCENTER_SPOOL_DIR", ".logcenter")))
     flush_interval_s: float = 10.0
-    auto_flush: bool = False  # auto-start background flush thread on init
+    auto_flush: bool = True  # auto-start background flush thread on init
 
     enabled: bool = True
 
@@ -32,7 +32,7 @@ class LogCenterConfig:
         timeout_s = float(os.getenv(f"{prefix}TIMEOUT_S", "10"))
         spool_dir = Path(os.getenv(f"{prefix}SPOOL_DIR", ".logcenter"))
         flush_interval_s = float(os.getenv(f"{prefix}FLUSH_INTERVAL_S", "10"))
-        auto_flush = os.getenv(f"{prefix}AUTO_FLUSH", "false").lower() in ("1", "true", "yes", "y")
+        auto_flush = os.getenv(f"{prefix}AUTO_FLUSH", "true").lower() in ("1", "true", "yes", "y")
         enabled = os.getenv(f"{prefix}ENABLED", "true").lower() in ("1", "true", "yes", "y")
 
         if not base_url or not project_id:
