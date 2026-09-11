@@ -128,6 +128,10 @@ ENV/
 env.bak/
 venv.bak/
 
+# logcenter_sdk spool data (examples/apps that use the SDK generate these)
+spool_data/
+.logcenter/
+
 # Spyder project settings
 .spyderproject
 .spyproject
