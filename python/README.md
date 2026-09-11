@@ -2,7 +2,17 @@
 
 SDK oficial para envio de logs ao **LogCenter**, projetado para ser utilizado como biblioteca em aplicações Python da empresa, com foco em **padronização, observabilidade e baixo acoplamento**.
 
-> ⚠️ **Importante**: a versão atual **NÃO é offline-first por padrão**. O spool (fila em arquivo) existe no SDK, mas **só é usado se você optar por isso**. Por default, o SDK tenta enviar e falha silenciosamente se a API estiver indisponível.
+> ⚠️ **Importante**: `send()` / `send_sync()` tentam o envio HTTP direto e, em **qualquer falha** (status não-2xx, erro de rede, config inválida), gravam o payload em `data_logs.jsonl` — isso é automático e incondicional, não há parâmetro para desativar. O reenvio desses itens pendentes, porém, **não é automático por si só**: só acontece através da thread de background (`sender.start_background_flush_thread()` ou `LogCenterConfig(auto_flush=True)`). Se você nunca iniciar essa thread, os itens pendentes apenas se acumulam em `data_logs.jsonl` até que você a inicie ou chame `sender.process_pending_sync()` manualmente.
+
+## 🚨 Breaking changes (a partir da 0.2.0)
+
+Se você está atualizando de uma versão anterior à `0.2.0`, os seguintes itens **não existem mais**:
+
+-   Métodos `send_spool()`, `flush_spool()` / `flush_spool_sync()` e o par assíncrono sem argumentos `start_background_flush()` / `stop_background_flush()`
+-   Parâmetro `spool_on_fail`
+-   Campos de `LogCenterConfig`: `spool_filename`, `spool_max_bytes`, `flush_batch_size`, `flush_threshold_count`
+
+Veja a seção [🔁 Spool (fila offline)](#-spool-fila-offline) abaixo para o comportamento atual equivalente.
 
 ---
 
@@ -14,7 +24,7 @@ SDK oficial para envio de logs ao **LogCenter**, projetado para ser utilizado co
 -   Suporte a **middleware ASGI** para auditoria automática
 -   Timestamp controlável (inclusive igualdade exata no `/dash`)
 -   Integração simples via código ou variáveis de ambiente
--   **Spool opcional em arquivo** (desativável por chamada)
+-   **Spool automático em arquivo** ao falhar o envio (`data_logs.jsonl`), com reenvio em background
 
 ---
 
@@ -125,42 +135,46 @@ Permite consultas como:
 
 ---
 
-## 🔁 Spool (fila offline) – **opcional**
+## 🔁 Spool (fila offline)
 
-O SDK possui suporte a spool em arquivo (`jsonl`), mas **não é obrigatório usar**.
+O SDK sempre grava em arquivo (`jsonl`), dentro de `config.spool_dir` (default `.logcenter`, ou `LOGCENTER_SPOOL_DIR`). Nenhum dos arquivos tem limite de tamanho.
 
-### Comportamento padrão
+### Comportamento automático ao enviar
 
--   O SDK tenta enviar o log
--   Se falhar, **NÃO spoola**, a menos que você permita
+-   `send()` / `send_sync()` tentam o envio HTTP direto.
+-   Sucesso -> o payload é gravado em `data_logs_backup.jsonl` (histórico do que foi entregue).
+-   Qualquer falha (status não-2xx, erro de rede, config inválida) -> o payload é gravado em `data_logs.jsonl` (pendente). Isso é incondicional, não existe parâmetro para desativar.
+-   Linhas de `data_logs.jsonl` que não conseguem ser parseadas como JSON durante o reprocessamento são movidas para `data_logs_corrupted.jsonl`.
 
-### Habilitando spool por chamada
-
-```python
-await sender.send(
-    level="ERROR",
-    message="Falha crítica",
-    spool_on_fail=True,
-)
-```
-
-### Reenvio manual do spool
+### Reenvio em background
 
 ```python
-await sender.flush_spool()
+# sender já criado como em "Configuração via código" (LogCenterSender(cfg))
+sender.start_background_flush_thread()
 ```
 
-### Background flush (opcional)
-
-```python
-sender.start_background_flush()
-```
+A cada `config.flush_interval_s` segundos, se houver itens pendentes (`spool.has_pending()`), a thread faz `GET {base_url}/alive`; se a resposta for HTTP 200, ela reprocessa `data_logs.jsonl` um item por vez (`process_pending_sync()`), parando no primeiro item que falhar — esse item e os seguintes permanecem pendentes para a próxima rodada.
 
 Encerramento:
 
 ```python
-await sender.stop_background_flush()
+sender.stop_background_flush_thread()
 ```
+
+Alternativa: iniciar a thread automaticamente na criação do `LogCenterSender`, via config:
+
+```python
+cfg = LogCenterConfig(
+    base_url="LOGCENTER_URL",
+    project_id="LOGCENTER_PROJECT_ID",
+    auto_flush=True,
+)
+sender = LogCenterSender(cfg)  # a thread de background já inicia aqui, dentro do __init__
+```
+
+### Reenvio manual (sem thread de background)
+
+Se preferir não rodar a thread, `sender.process_pending_sync()` faz uma única tentativa de reprocessar os itens pendentes (mesma lógica: checa `/alive`, para no primeiro erro).
 
 ---
 
@@ -185,7 +199,7 @@ app.add_middleware(
     -   respostas HTTP 5xx
 -   NÃO interfere no fluxo da aplicação
     
--   NÃO exige spool
+-   Uma chamada de `send()` que falhe durante a auditoria é spoolada como qualquer outra — o middleware não trata isso de forma especial
     
 
 ---
@@ -241,7 +255,7 @@ Correto
 ## 📌 Versão
 
 ```
-0.1.0-dev
+0.2.0
 ```
 
 Alinhado com LogCenter V2 e dashboard unificado.

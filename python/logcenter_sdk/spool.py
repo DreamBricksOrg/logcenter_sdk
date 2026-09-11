@@ -1,122 +1,120 @@
 from __future__ import annotations
 
 import json
-import os
 import threading
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Tuple
+from typing import Any, Callable, Dict
 
 
-@dataclass
-class SpoolStats:
-    queued: int
-    bytes: int
+MAIN_FILENAME = "data_logs.jsonl"
+BACKUP_FILENAME = "data_logs_backup.jsonl"
+CORRUPTED_FILENAME = "data_logs_corrupted.jsonl"
 
 
 class FileSpool:
     """
-    Spool simples e robusto:
-      - append-only em JSONL (1 evento por linha)
-      - flush consome N linhas e regrava o resto (OK para filas pequenas/médias)
+    data_logs.jsonl        - pendentes, aguardando envio
+    data_logs_backup.jsonl - todo log entregue com sucesso (direto ou via retry)
+    data_logs_corrupted.jsonl - linhas que nao deram para parsear como JSON
+
+    Nenhum dos tres arquivos tem limite de tamanho.
     """
 
-    def __init__(self, spool_dir: Path, filename: str, max_bytes: int):
+    def __init__(self, spool_dir: Path):
         self.spool_dir = spool_dir
-        self.path = spool_dir / filename
-        self.max_bytes = max_bytes
+        self.main_path = spool_dir / MAIN_FILENAME
+        self.backup_path = spool_dir / BACKUP_FILENAME
+        self.corrupted_path = spool_dir / CORRUPTED_FILENAME
         self._lock = threading.Lock()
-        self.spool_dir.mkdir(parents=True, exist_ok=True)
-        self.path.touch(exist_ok=True)
-        self._count = self._count_lines()
 
-    def _count_lines(self) -> int:
+        self.spool_dir.mkdir(parents=True, exist_ok=True)
+        self.main_path.touch(exist_ok=True)
+        self.backup_path.touch(exist_ok=True)
+        self.corrupted_path.touch(exist_ok=True)
+
+    def _append_line(self, path: Path, item: Dict[str, Any]) -> None:
+        raw = json.dumps(item, ensure_ascii=False, separators=(",", ":"))
+        with path.open("a", encoding="utf-8") as f:
+            f.write(raw + "\n")
+
+    def _count_lines(self, path: Path) -> int:
         try:
-            with self.path.open("r", encoding="utf-8") as f:
-                return sum(1 for _ in f)
+            with path.open("r", encoding="utf-8") as f:
+                return sum(1 for line in f if line.strip())
         except Exception:
             return 0
 
-    def count(self) -> int:
-        return self._count
-
-    def stats(self) -> SpoolStats:
-        try:
-            size = self.path.stat().st_size
-        except Exception:
-            size = 0
-        return SpoolStats(queued=self._count, bytes=size)
-
-    def append(self, item: Dict[str, Any]) -> None:
-        raw = json.dumps(item, ensure_ascii=False, separators=(",", ":"))
-        raw_line = raw + "\n"
-
+    def append_main(self, item: Dict[str, Any]) -> None:
         with self._lock:
-            if self.path.exists():
-                try:
-                    size = self.path.stat().st_size
-                except Exception:
-                    size = 0
-            else:
-                size = 0
+            self._append_line(self.main_path, item)
 
-            if size + len(raw_line.encode("utf-8")) > self.max_bytes:
-                self._trim_to_fit(extra_bytes=len(raw_line.encode("utf-8")))
+    def append_backup(self, item: Dict[str, Any]) -> None:
+        with self._lock:
+            self._append_line(self.backup_path, item)
 
-            with self.path.open("a", encoding="utf-8") as f:
-                f.write(raw_line)
-            self._count += 1
-
-    def _trim_to_fit(self, extra_bytes: int) -> None:
-        """
-        Remove linhas mais antigas até caber.
-        Implementação simples: mantém as últimas linhas que cabem.
-        Assumes the caller holds self._lock.
-        """
+    def has_pending(self) -> bool:
         try:
-            lines = self.path.read_text(encoding="utf-8").splitlines(True)
+            return self.main_path.stat().st_size > 0
         except Exception:
-            self.path.write_text("", encoding="utf-8")
-            self._count = 0
-            return
+            return False
 
-        kept: List[str] = []
-        total = extra_bytes
-        for line in reversed(lines):
-            b = len(line.encode("utf-8"))
-            if total + b > self.max_bytes:
-                break
-            kept.append(line)
-            total += b
+    def pending_count(self) -> int:
+        return self._count_lines(self.main_path)
 
-        kept.reverse()
-        self.path.write_text("".join(kept), encoding="utf-8")
-        self._count = len(kept)
+    def backup_count(self) -> int:
+        return self._count_lines(self.backup_path)
 
-    def pop_batch(self, n: int) -> Tuple[List[Dict[str, Any]], int]:
+    def corrupted_count(self) -> int:
+        return self._count_lines(self.corrupted_path)
+
+    def process_pending(self, send_fn: Callable[[Dict[str, Any]], bool]) -> Dict[str, int]:
         """
-        Remove e retorna até n itens.
-        Retorna (items, remaining_count).
+        Processa data_logs.jsonl da linha mais antiga para a mais nova.
+        - linha invalida (nao parseia como JSON) -> data_logs_corrupted.jsonl, segue.
+        - send_fn(item) retorna True -> data_logs_backup.jsonl, segue.
+        - send_fn(item) retorna False -> para o loop; essa linha e as seguintes
+          permanecem em data_logs.jsonl, na mesma ordem, para a proxima tentativa.
+        send_fn nao deve lancar excecao - deve capturar e retornar False. Isso e
+        so uma linha de defesa: se send_fn lancar mesmo assim, o efeito e o
+        mesmo de retornar False (a linha atual e as seguintes ficam pendentes).
         """
         with self._lock:
             try:
-                lines = self.path.read_text(encoding="utf-8").splitlines()
+                lines = self.main_path.read_text(encoding="utf-8").splitlines()
             except Exception:
-                return ([], 0)
+                return {"sent": 0, "corrupted": 0, "remaining": 0}
 
-            if not lines:
-                return ([], 0)
+            sent = 0
+            corrupted = 0
+            stop_index = len(lines)
 
-            take = lines[:n]
-            rest = lines[n:]
-
-            items: List[Dict[str, Any]] = []
-            for ln in take:
-                try:
-                    items.append(json.loads(ln))
-                except Exception:
+            for i, line in enumerate(lines):
+                if not line.strip():
                     continue
 
-            self.path.write_text("\n".join(rest) + ("\n" if rest else ""), encoding="utf-8")
-            self._count = len(rest)
-            return (items, len(rest))
+                try:
+                    item = json.loads(line)
+                except Exception:
+                    self._append_line(self.corrupted_path, {"raw": line})
+                    corrupted += 1
+                    continue
+
+                try:
+                    ok = send_fn(item)
+                except Exception:
+                    ok = False
+
+                if ok:
+                    self._append_line(self.backup_path, item)
+                    sent += 1
+                else:
+                    stop_index = i
+                    break
+
+            remaining_lines = lines[stop_index:]
+            if remaining_lines:
+                self.main_path.write_text("\n".join(remaining_lines) + "\n", encoding="utf-8")
+            else:
+                self.main_path.write_text("", encoding="utf-8")
+
+            return {"sent": sent, "corrupted": corrupted, "remaining": len(remaining_lines)}
