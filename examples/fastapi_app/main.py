@@ -31,17 +31,17 @@ cfg = LogCenterConfig(
     auto_flush=os.getenv("LOGCENTER_AUTO_FLUSH", "true").lower() in ("1", "true", "yes"),
 )
 
-sender = LogCenterSender(cfg)
+logcenter = LogCenterSender(cfg)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     yield
-    sender.stop_background_flush_thread()
+    logcenter.stop_background_flush_thread()
 
 
 app = FastAPI(title="logcenter_sdk fastapi example", lifespan=lifespan)
-app.add_middleware(LogCenterAuditMiddleware, sender=sender)
+app.add_middleware(LogCenterAuditMiddleware, sender=logcenter)
 
 
 class LogIn(BaseModel):
@@ -65,7 +65,7 @@ async def index():
 
 @app.post("/log")
 async def log(body: LogIn):
-    ok = await sender.send(
+    ok = await logcenter.send(
         body.level,
         body.message,
         tags=body.tags,
@@ -82,7 +82,7 @@ async def status():
 
 @app.post("/flush-now")
 async def flush_now():
-    result = sender.process_pending_sync()
+    result = logcenter.process_pending_sync()
     return {"result": result, "spool": _spool_status()}
 
 
@@ -102,7 +102,7 @@ async def five_hundred():
 
 def _spool_status():
     return {
-        "pending": sender.spool.pending_count(),
-        "backup": sender.spool.backup_count(),
-        "corrupted": sender.spool.corrupted_count(),
+        "pending": logcenter.spool.pending_count(),
+        "backup": logcenter.spool.backup_count(),
+        "corrupted": logcenter.spool.corrupted_count(),
     }

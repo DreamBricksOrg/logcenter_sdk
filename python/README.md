@@ -187,6 +187,14 @@ Se preferir não rodar a thread, `sender.process_pending_sync()` faz uma única 
 
 ---
 
+## 🌶️⚡ Flask e FastAPI
+
+Guia de integração passo a passo, com `send()` vs `send_sync()` destacado:
+[`README_FLASK_FASTAPI.md`](./README_FLASK_FASTAPI.md). Exemplos completos e
+rodáveis em `examples/flask_app/` e `examples/fastapi_app/`.
+
+---
+
 ## 🧱 Middleware ASGI (FastAPI / Starlette)
 
 O SDK fornece um middleware de auditoria HTTP.

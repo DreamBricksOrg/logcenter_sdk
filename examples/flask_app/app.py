@@ -29,8 +29,8 @@ cfg = LogCenterConfig(
     auto_flush=os.getenv("LOGCENTER_AUTO_FLUSH", "true").lower() in ("1", "true", "yes"),
 )
 
-sender = LogCenterSender(cfg)
-atexit.register(sender.stop_background_flush_thread)
+logcenter = LogCenterSender(cfg)
+atexit.register(logcenter.stop_background_flush_thread)
 
 app = Flask(__name__)
 
@@ -53,7 +53,7 @@ def log():
     body = request.get_json(silent=True) or {}
     level = body.get("level", "INFO")
     message = body.get("message", "log de teste (flask)")
-    ok = sender.send_sync(
+    ok = logcenter.send_sync(
         level,
         message,
         tags=body.get("tags"),
@@ -71,15 +71,15 @@ def status():
 
 @app.post("/flush-now")
 def flush_now():
-    result = sender.process_pending_sync()
+    result = logcenter.process_pending_sync()
     return jsonify({"result": result, "spool": _spool_status()})
 
 
 def _spool_status():
     return {
-        "pending": sender.spool.pending_count(),
-        "backup": sender.spool.backup_count(),
-        "corrupted": sender.spool.corrupted_count(),
+        "pending": logcenter.spool.pending_count(),
+        "backup": logcenter.spool.backup_count(),
+        "corrupted": logcenter.spool.corrupted_count(),
     }
 
 
