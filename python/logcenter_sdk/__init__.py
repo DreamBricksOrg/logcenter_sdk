@@ -1,7 +1,8 @@
 import logging
 
-from .config import LogCenterConfig
+from .config import LogCenterConfig, LogCenterV3Config
 from .sender import LogCenterSender
+from .senderV3 import LogCenterV3Sender
 from .middleware import LogCenterAuditMiddleware
 
 # Biblioteca fica silenciosa por padrao - a aplicacao que usa a SDK decide se
@@ -9,5 +10,5 @@ from .middleware import LogCenterAuditMiddleware
 # logging.getLogger("logcenter_sdk").setLevel(logging.INFO) + um handler).
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
-__all__ = ["LogCenterConfig", "LogCenterSender", "LogCenterAuditMiddleware"]
+__all__ = ["LogCenterConfig", "LogCenterSender", "LogCenterAuditMiddleware", "LogCenterV3Config","LogCenterV3Sender"]
 __version__ = "0.2.0"

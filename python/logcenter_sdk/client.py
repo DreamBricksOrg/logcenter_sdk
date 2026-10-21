@@ -35,3 +35,13 @@ class LogCenterHttpClient:
         url = f"{self.base_url}/alive"
         with httpx.Client(timeout=self.timeout, follow_redirects=self.follow_redirects) as client:
             return client.get(url, headers=self.headers())
+
+    async def post_log_v3(self, payload: Dict[str, Any]) -> httpx.Response:
+        url = f"{self.base_url}/api/v1/events/"
+        async with httpx.AsyncClient(timeout=self.timeout, follow_redirects=self.follow_redirects) as client:
+            return await client.post(url, headers=self.headers(), json=payload)
+        
+    def post_log_sync_v3(self, payload: Dict[str, Any]) -> httpx.Response:
+        url = f"{self.base_url}/api/v1/events/"
+        with httpx.Client(timeout=self.timeout, follow_redirects=self.follow_redirects) as client:
+            return client.post(url, headers=self.headers(), json=payload)

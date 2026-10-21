@@ -5,10 +5,11 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 from uvicorn.protocols.utils import get_path_with_query_string
 
 from .sender import LogCenterSender
+from .senderV3 import LogCenterV3Sender
 
 
 class LogCenterAuditMiddleware:
-    def __init__(self, app: ASGIApp, sender: LogCenterSender):
+    def __init__(self, app: ASGIApp, sender: LogCenterSender| LogCenterV3Sender):
         self.app = app
         self.sender = sender
 

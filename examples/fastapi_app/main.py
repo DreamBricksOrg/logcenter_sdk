@@ -9,8 +9,8 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from pydantic import BaseModel
 
-from logcenter_sdk import LogCenterAuditMiddleware, LogCenterConfig, LogCenterSender
-
+from logcenter_sdk import LogCenterAuditMiddleware, LogCenterConfig, LogCenterSender, LogCenterV3Config, LogCenterV3Sender
+from event_types import EventType
 load_dotenv()
 
 # Mostra no console os logs da propria SDK (envio com sucesso, linha sendo
@@ -31,17 +31,27 @@ cfg = LogCenterConfig(
     auto_flush=os.getenv("LOGCENTER_AUTO_FLUSH", "true").lower() in ("1", "true", "yes"),
 )
 
+cfgv3 = LogCenterV3Config(
+    base_url=os.getenv("LOGCENTERV3_BASE_URL", "http://localhost:8000"),
+    api_key=os.getenv("LOGCENTERV3_API_KEY") or None,
+    spool_dir=Path(os.getenv("LOGCENTERV3_SPOOL_DIR", "./spool_data")),
+    flush_interval_s=float(os.getenv("LOGCENTERV3_FLUSH_INTERVAL_S", "5")),
+    auto_flush=os.getenv("LOGCENTERV3_AUTO_FLUSH", "true").lower() in ("1", "true", "yes"),
+)
+
 logcenter = LogCenterSender(cfg)
+logcenterV3 = LogCenterV3Sender(cfgv3)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     yield
     logcenter.stop_background_flush_thread()
-
+    logcenterV3.stop_background_flush_thread()
 
 app = FastAPI(title="logcenter_sdk fastapi example", lifespan=lifespan)
 app.add_middleware(LogCenterAuditMiddleware, sender=logcenter)
+app.add_middleware(LogCenterAuditMiddleware, sender=logcenterV3)
 
 
 class LogIn(BaseModel):
@@ -72,7 +82,12 @@ async def log(body: LogIn):
         data=body.data,
         request_id=body.request_id,
     )
-    return {"sent_immediately": ok, "spool": _spool_status()}
+    print("TesteDeChegar")
+    ok_v3 = await logcenterV3.send(
+        EventType.BOTAO_APERTADO.generate_payload()
+    )
+    print(ok_v3)
+    return {"sent_immediately": ok, "sent_immediately_v3": ok_v3, "spool": _spool_status()}
 
 
 @app.get("/status")

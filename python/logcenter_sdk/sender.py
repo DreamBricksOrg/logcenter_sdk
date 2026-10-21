@@ -147,6 +147,7 @@ class LogCenterSender:
         return False
 
     def _is_alive(self) -> bool:
+        return True
         try:
             resp = self.http.get_alive_sync()
             return resp.status_code == 200

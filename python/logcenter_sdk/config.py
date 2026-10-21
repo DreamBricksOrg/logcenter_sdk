@@ -48,3 +48,41 @@ class LogCenterConfig:
             auto_flush=auto_flush,
             enabled=enabled,
         )
+
+@dataclass(frozen=True)
+class LogCenterV3Config:
+    base_url: str
+    api_key: Optional[str] = None
+    flush_interval_s: float = 10.0
+    auto_flush: bool = True  # auto-start background flush thread on init
+    
+    spool_dir: Path = field(default_factory=lambda: Path(os.getenv("LOGCENTERV3_SPOOL_DIR", ".logcenter")))    
+    timeout_s: float = 10.0
+    follow_redirects: bool = True
+
+    enabled: bool = True
+    
+    
+    @staticmethod
+    def from_env(prefix: str = "LOGCENTERV3_") -> "LogCenterV3Config":
+        base_url = (os.getenv(f"{prefix}BASE_URL") or "").rstrip("/")
+        api_key = os.getenv(f"{prefix}API_KEY")
+
+        timeout_s = float(os.getenv(f"{prefix}TIMEOUT_S", "10"))
+        spool_dir = Path(os.getenv(f"{prefix}SPOOL_DIR", ".logcenter"))
+        flush_interval_s = float(os.getenv(f"{prefix}FLUSH_INTERVAL_S", "10"))
+        auto_flush = os.getenv(f"{prefix}AUTO_FLUSH", "true").lower() in ("1", "true", "yes", "y")
+        enabled = os.getenv(f"{prefix}ENABLED", "true").lower() in ("1", "true", "yes", "y")
+
+        if not base_url:
+            raise ValueError("Missing LOGCENTERV3_BASE_URL")
+
+        return LogCenterV3Config(
+            base_url=base_url,
+            api_key=api_key,
+            timeout_s=timeout_s,
+            spool_dir=spool_dir,
+            flush_interval_s=flush_interval_s,
+            auto_flush=auto_flush,
+            enabled=enabled,
+        )
