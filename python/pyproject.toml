@@ -3,8 +3,8 @@ requires = ["setuptools<77.0.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "logcenter-sdk"
-version = "0.2.0"
+name = "logcenter_sdk"
+version = "0.3.1"
 description = "SDK oficial para envio de logs ao LogCenter"
 readme = "README.md"
 requires-python = ">=3.9"

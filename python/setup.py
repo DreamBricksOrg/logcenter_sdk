@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='log_center_sdk',
-    version='0.3.0',
+    version='0.3.1',
     packages=find_packages(),
     install_requires=[
         "httpx>=0.24.0",
